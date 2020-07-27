@@ -1,7 +1,7 @@
 #
 # Makefile
 #
-BIN = pl20d
+BIN = pl20
 BINDIR = /usr/local/sbin/
 DESTDIR = /usr
 PREFIX = /local

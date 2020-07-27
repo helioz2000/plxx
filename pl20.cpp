@@ -44,6 +44,18 @@ const int pl20Baud = B9600;
 #define PL20_CMD_SOLV 53	// Solar Voltage MSB
 #define PL20_CMD_RSTATE 101	// regulator state
 
+/**
+ * log to console and syslog for daemon
+ */
+template<typename... Args> void log(int priority, const char * f, Args... args) {
+	if (runningAsDaemon) {
+		syslog(priority, f, args...);
+	} else {
+		fprintf(stderr, f, args...);
+		fprintf(stderr, "\n");
+	}
+}
+
 
 /* Handle OS signals
 */
@@ -65,7 +77,7 @@ void sigHandler(int signum)
 			break;
 	}
 
-	//log(LOG_INFO, "Received %s", signame);
+	log(LOG_INFO, "Received %s", signame);
 	exitSignal = true;
 }
 
