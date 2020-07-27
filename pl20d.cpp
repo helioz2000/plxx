@@ -4,7 +4,7 @@
  * https://github.com/helioz2000/pl20
  *
  * Author: Erwin Bejsta
- *July 2020
+ * July 2020
  */
 
 /*********************
@@ -20,20 +20,24 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <string>
+#include <termios.h>
 #include <syslog.h>
 #include <sys/utsname.h>
 #include <time.h>
 #include <unistd.h>
 
 using namespace std;
-using namespace libconfig;
+//using namespace libconfig;
 
 bool exitSignal = false;
 bool runningAsDaemon = false;
 std::string processName;
 
-/** Handle OS signals
- */
+int ttyBaud = B9600;
+
+/* Handle OS signals
+*/
 void sigHandler(int signum)
 {
 	char signame[10];
@@ -103,30 +107,43 @@ int main (int argc, char *argv[])
 	//log(LOG_INFO,"[%s] PID: %d PPID: %d", argv[0], getpid(), getppid());
 	//log(LOG_INFO,"Version %d.%02d [%s] ", version_major, version_minor, build_date_str);
 
-	signal (SIGINT, sigHandler);
+	if (runningAsDaemon)
+		signal (SIGINT, sigHandler);
 
-
-	char *portname = "/dev/ttyUSB0";
+	string portname = "/dev/ttyUSB0";
 	int fd;
 	int wlen;
+	int rdLen;
 
-    fd = open(portname, O_RDWR | O_NOCTTY | O_SYNC);
+    fd = open(portname.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
     if (fd < 0) {
-        printf("Error opening %s: %s\n", portname, strerror(errno));
-        return -1;
+		printf("Error opening %s: %s\n", portname.c_str(), strerror(errno));
+		goto exit_fail;
     }
     /*baudrate 115200, 8 bits, no parity, 1 stop bit */
-    set_interface_attribs(fd, B115200);
+    set_interface_attribs(fd, ttyBaud);
     //set_mincount(fd, 0);                /* set to pure timed read */
 
     /* simple output */
-    wlen = write(fd, "Hello!\n", 7);
-    if (wlen != 7) {
+	unsigned char txbuf[10];
+	txbuf[0] = 20;
+	txbuf[1] = 0;
+	txbuf[2] = 0;
+	txbuf[3] = 235;
+	txbuf[2] = 192;
+	txbuf[2] = 192;
+	txbuf[2] = 192;
+	txbuf[2] = 192;
+	//printf("writing to %s\n", portname.c_str());
+    wlen = write(fd, txbuf, 4);
+    if (wlen != 4) {
         printf("Error from write: %d, %d\n", wlen, errno);
     }
     tcdrain(fd);    /* delay for output */
 
+	printf("%d bytes written\n", wlen);
 
+	rdLen = 0;
     /* simple noncanonical input */
     do {
         unsigned char buf[80];
@@ -138,8 +155,9 @@ int main (int argc, char *argv[])
 		//	buf[rdlen] = 0;
 		//	printf("Read %d: \"%s\"\n", rdlen, buf);
 		// display hex
+			rdLen += rdlen;
             unsigned char   *p;
-            printf("Read %d:", rdlen);
+            printf("Read %d:\n", rdlen);
             for (p = buf; rdlen-- > 0; p++)
                 printf(" 0x%x", *p);
             printf("\n");
@@ -147,11 +165,9 @@ int main (int argc, char *argv[])
             printf("Error from read: %d: %s\n", rdlen, strerror(errno));
         } else {  /* rdlen == 0 */
             printf("Timeout from read\n");
-        }               
+        }
         /* repeat read to get full message */
-    } while (1);
-
-
+    } while (rdLen < 2);
 
 	exit(EXIT_SUCCESS);
 
