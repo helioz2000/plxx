@@ -11,6 +11,8 @@
  *      INCLUDES
  *********************/
 
+#include "pl20.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -21,68 +23,83 @@
 #include <stdio.h>
 #include <string.h>
 #include <string>
-#include <termios.h>
-#include <syslog.h>
-#include <sys/utsname.h>
 #include <sys/select.h>
-#include <time.h>
-#include <unistd.h>
 
 using namespace std;
-//using namespace libconfig;
-
-bool exitSignal = false;
-bool runningAsDaemon = false;
-std::string processName;
-
-int tty_fd;		// file descriptor for serial port
 
 /* PL20 comms */
-const int pl20Baud = B9600;
-#define PL20_PORT "/dev/ttyUSB0"
-#define PL20_CMD_VERSION 0	// Software Version
-#define PL20_CMD_BATV 50	// Battery Voltage
-#define PL20_CMD_SOLV 53	// Solar Voltage MSB
-#define PL20_CMD_RSTATE 101	// regulator state
+#define PL20_CMD_RD_RAM 20		// Read from processor RAM
+#define PL20_CMD_RD_EEPROM 72	// Read from EEPROM
+#define PL20_CMD_WR_RAM 152		// Write to processor RAM
+#define PL20_CMD_WR_EEPROM 202	// Write to EEPROM
+#define PL20_CMD_PUSH 87		// Short push or long push
 
-/**
- * log to console and syslog for daemon
- */
-template<typename... Args> void log(int priority, const char * f, Args... args) {
-	if (runningAsDaemon) {
-		syslog(priority, f, args...);
-	} else {
-		fprintf(stderr, f, args...);
-		fprintf(stderr, "\n");
+
+/*********************
+ * MEMBER FUNCTIONS
+ *********************/
+ 
+Pl20::Pl20() {
+	printf("%s\n", __func__);
+	throw runtime_error("Class Pl20 - forbidden constructor");
+}
+
+Pl20::Pl20(const char* ttyDeviceStr, int baud) {
+	if (ttyDeviceStr == NULL) {
+		throw invalid_argument("Class Pl20 - ttyDeviceStr is NULL");
 	}
+	this->_ttyDevice = ttyDeviceStr;
+	this->_ttyBaud = baud
+
+}
+
+Pl20::~Pl20() {
+	
+}
+
+int Pl20::read_RAM(unsigned char address, unsigned char *readValue) {
+	unsigned char value;
+	
+	if (_open_tty() < 0) 
+		return -1;
+
+	if (_tty_write(address, PL20_CMD_RD_RAM) < 0)
+		goto return_fail;
+
+	if (_tty_read(&value) < 0)
+		goto return_fail;
+
+	*readValue = value;
+	return 0;
+	
+return_fail:
+	_tty_close();
+	return -1;
+}
+
+int Pl20::_tty_open() {
+
+	this->_tty_fd = open(this->_ttyDevice.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
+	if (_tty_fd < 0) {
+		printf("Error opening %s: %s\n", this->_ttyDevice.c_str(), strerror(errno));
+		return -1;
+	}
+	/*baudrate 8 bits, no parity, 1 stop bit */
+	if (_tty_set_attribs(this->_tty_fd, this->baud) < 0){
+		this->_tty_close();
+		return -1;
+	}
+	//set_mincount(tty_fd, 0);                /* set to pure timed read */
+	return 0;
+}
+
+void Pl20::_tty_close() {
+	close(this->_tty_fd);
+	this->_tty_fd = -1;
 }
 
 
-/* Handle OS signals
-*/
-void sigHandler(int signum)
-{
-	char signame[10];
-	switch (signum) {
-		case SIGTERM:
-			strcpy(signame, "SIGTERM");
-			break;
-		case SIGHUP:
-			strcpy(signame, "SIGHUP");
-			break;
-		case SIGINT:
-			strcpy(signame, "SIGINT");
-			break;
-
-		default:
-			break;
-	}
-
-	log(LOG_INFO, "Received %s", signame);
-	exitSignal = true;
-}
-
-int set_interface_attribs(int fd, int speed)
+int Pl20::_tty_set_attribs(int fd, int speed)
 {
     struct termios tty;
 
@@ -117,43 +134,25 @@ int set_interface_attribs(int fd, int speed)
     return 0;
 }
 
-int open_tty() {
-	string portname = PL20_PORT;
-	tty_fd = open(portname.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
-	if (tty_fd < 0) {
-		printf("Error opening %s: %s\n", portname.c_str(), strerror(errno));
-		return -1;
-	}
-	/*baudrate 8 bits, no parity, 1 stop bit */
-	if (set_interface_attribs(tty_fd, pl20Baud) < 0){
-		close(tty_fd);
-		return -1;
-	}
-	//set_mincount(tty_fd, 0);                /* set to pure timed read */
-	return 0;
-}
-
-int tty_write(unsigned char cmd) {
+int Pl20::_tty_write(unsigned char address, unsigned char cmd) {
 	int wrLen;
 	unsigned char txbuf[10];
-	txbuf[0] = 20;
-	txbuf[1] = cmd;
+	txbuf[0] = cmd;
+	txbuf[1] = address;
 	txbuf[2] = 0;
-	txbuf[3] = 235;
+	txbuf[3] = 255 - cmd;		// One's complement
 
-	return 0;
-
-	wrLen = write(tty_fd, txbuf, 4);
+	wrLen = write(this->_tty_fd, txbuf, 4);
 	if (wrLen != 4) {
 		printf("Error from write: %d, %d\n", wrLen, errno);
 		return -1;
 	}
-	tcdrain(tty_fd);    /* delay for output */
+	tcdrain(this->_tty_fd);    /* delay for output */
 	return 0;
 }
 
 /* read PL20 reply */
-int tty_read(unsigned char *value) {
+int Pl20::_tty_read(unsigned char *value) {
 	int rxlen = 0;
 	int rdlen;
 	unsigned char buf[80];
@@ -163,11 +162,11 @@ int tty_read(unsigned char *value) {
 	int select_result;
 
 	FD_ZERO(&rfds);
-	FD_SET(tty_fd, &rfds);
+	FD_SET(this->_tty_fd, &rfds);
 	tv.tv_sec = 1;
 	tv.tv_usec = 0;
 
-	select_result = select(tty_fd + 1, &rfds, NULL, NULL, &tv);
+	select_result = select(this->_tty_fd + 1, &rfds, NULL, NULL, &tv);
 
 	if (select_result == -1) {
 		perror("select()");
@@ -181,7 +180,7 @@ int tty_read(unsigned char *value) {
 	}
 
 	do {
-		rdlen = read(tty_fd, buf, sizeof(buf) - 1);
+		rdlen = read(this->_tty_fd, buf, sizeof(buf) - 1);
 		if (rdlen > 0) {
 			rxlen += rdlen;
 			if  (buf[0] != 200) {
@@ -200,34 +199,4 @@ int tty_read(unsigned char *value) {
 	return 0;
 }
 
-int main (int argc, char *argv[])
-{
-	unsigned char value;
-	if ( getppid() == 1) runningAsDaemon = true;
-	processName =  argv[0];
 
-	//if (! parseArguments(argc, argv) ) goto exit_fail;
-
-	//log(LOG_INFO,"[%s] PID: %d PPID: %d", argv[0], getpid(), getppid());
-	//log(LOG_INFO,"Version %d.%02d [%s] ", version_major, version_minor, build_date_str);
-
-	if (runningAsDaemon)
-		signal (SIGINT, sigHandler);
-
-	if (open_tty() < 0) 
-		goto exit_fail;
-
-	if (tty_write(PL20_CMD_BATV) < 0)
-		goto exit_fail;
-
-	if (tty_read(&value) < 0)
-		goto exit_fail;
-
-	printf("Reply: %d\n", value);
-
-	exit(EXIT_SUCCESS);
-
-exit_fail:
-	//log(LOG_INFO, "exit with error");
-	exit(EXIT_FAILURE);
-}
