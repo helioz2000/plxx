@@ -47,9 +47,9 @@ private:
 	int _tty_read(unsigned char *value);
 	
 	std::string _ttyDevice;
-	int _tty_baud;
-	int _tty_fd;
+	int _ttyBaud;
+	int _ttyFd;
 
-}
+};
 
 #endif /* _PL20_H_ */

@@ -22,8 +22,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <string>
 #include <sys/select.h>
+#include <unistd.h>
+
+#include <string>
+#include <stdexcept>
+#include <iostream>
 
 using namespace std;
 
@@ -49,8 +53,7 @@ Pl20::Pl20(const char* ttyDeviceStr, int baud) {
 		throw invalid_argument("Class Pl20 - ttyDeviceStr is NULL");
 	}
 	this->_ttyDevice = ttyDeviceStr;
-	this->_ttyBaud = baud
-
+	this->_ttyBaud = baud;
 }
 
 Pl20::~Pl20() {
@@ -60,7 +63,7 @@ Pl20::~Pl20() {
 int Pl20::read_RAM(unsigned char address, unsigned char *readValue) {
 	unsigned char value;
 	
-	if (_open_tty() < 0) 
+	if (_tty_open() < 0) 
 		return -1;
 
 	if (_tty_write(address, PL20_CMD_RD_RAM) < 0)
@@ -79,23 +82,23 @@ return_fail:
 
 int Pl20::_tty_open() {
 
-	this->_tty_fd = open(this->_ttyDevice.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
-	if (_tty_fd < 0) {
+	this->_ttyFd = open(this->_ttyDevice.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
+	if (_ttyFd < 0) {
 		printf("Error opening %s: %s\n", this->_ttyDevice.c_str(), strerror(errno));
 		return -1;
 	}
 	/*baudrate 8 bits, no parity, 1 stop bit */
-	if (_tty_set_attribs(this->_tty_fd, this->baud) < 0){
+	if (_tty_set_attribs(this->_ttyFd, this->_ttyBaud) < 0){
 		this->_tty_close();
 		return -1;
 	}
-	//set_mincount(tty_fd, 0);                /* set to pure timed read */
+	//set_mincount(_tty_Fd, 0);                /* set to pure timed read */
 	return 0;
 }
 
 void Pl20::_tty_close() {
-	close(this->_tty_fd);
-	this->_tty_fd = -1;
+	close(this->_ttyFd);
+	this->_ttyFd = -1;
 }
 
 
@@ -142,12 +145,12 @@ int Pl20::_tty_write(unsigned char address, unsigned char cmd) {
 	txbuf[2] = 0;
 	txbuf[3] = 255 - cmd;		// One's complement
 
-	wrLen = write(this->_tty_fd, txbuf, 4);
+	wrLen = write(this->_ttyFd, txbuf, 4);
 	if (wrLen != 4) {
 		printf("Error from write: %d, %d\n", wrLen, errno);
 		return -1;
 	}
-	tcdrain(this->_tty_fd);    /* delay for output */
+	tcdrain(this->_ttyFd);    /* delay for output */
 	return 0;
 }
 
@@ -162,11 +165,11 @@ int Pl20::_tty_read(unsigned char *value) {
 	int select_result;
 
 	FD_ZERO(&rfds);
-	FD_SET(this->_tty_fd, &rfds);
+	FD_SET(this->_ttyFd, &rfds);
 	tv.tv_sec = 1;
 	tv.tv_usec = 0;
 
-	select_result = select(this->_tty_fd + 1, &rfds, NULL, NULL, &tv);
+	select_result = select(this->_ttyFd + 1, &rfds, NULL, NULL, &tv);
 
 	if (select_result == -1) {
 		perror("select()");
@@ -180,7 +183,7 @@ int Pl20::_tty_read(unsigned char *value) {
 	}
 
 	do {
-		rdlen = read(this->_tty_fd, buf, sizeof(buf) - 1);
+		rdlen = read(this->_ttyFd, buf, sizeof(buf) - 1);
 		if (rdlen > 0) {
 			rxlen += rdlen;
 			if  (buf[0] != 200) {

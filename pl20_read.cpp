@@ -28,7 +28,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "Pl20.h"
+#include "pl20.h"
 
 using namespace std;
 //using namespace libconfig;
