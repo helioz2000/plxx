@@ -25,6 +25,9 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <string>
+#include <iostream>
+
 #include <libconfig.h++>
 #include <mosquitto.h>
 //#include <modbus.h>
@@ -233,7 +236,7 @@ bool var_process(void) {
 	if (tag != NULL) {
 		// read time due ?
 		if (tag->nextReadTime <= now) {
-			tag->setValue(hw.read_cpu_temp());
+			//tag->setValue(hw.read_cpu_temp());
 			tag->nextReadTime = now + tag->readInterval;
 		retval = true;
 		}

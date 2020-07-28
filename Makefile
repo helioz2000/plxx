@@ -2,6 +2,7 @@
 # Makefile
 #
 BIN_READ = plxx_read
+BIN_BRIDGE = plbridge
 BINDIR = /usr/local/sbin/
 DESTDIR = /usr
 PREFIX = /local
@@ -20,7 +21,7 @@ CFLAGS += -O3 -g3 $(INC)
 # directory for local libs
 LDFLAGS = -L$(DESTDIR)$(PREFIX)/lib
 #LIBS += -lstdc++ -lm -lmosquitto -lconfig++ -lmodbus
-#LIBS += -lstdc++ -lm -lmosquitto
+LIBS_BRIDGE += -lstdc++ -lm -lmosquitto
 LIBS_READ += -lstdc++
 
 #VPATH =
@@ -57,6 +58,9 @@ $(OBJDIR)/%.o: %.cpp
 read: $(OBJS)
 	$(CC) -o $(BIN_READ) $(OBJS) $(LDFLAGS) $(LIBS_READ)
 
+bridge: $(OBJS)
+	$(CC) -o $(BIN_BRIDGE) $(OBJS) $(LDFLAGS) $(LIBS_BRIDGE)
+
 default: $(OBJS)
 	$(CC) -o $(BIN) $(OBJS) $(LDFLAGS) $(LIBS)
 
@@ -64,7 +68,6 @@ default: $(OBJS)
 nothing:
 	$(info OBJS ="$(OBJS)")
 	$(info DONE)
-
 
 clean:
 	rm -f $(OBJS)
