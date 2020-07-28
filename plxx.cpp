@@ -1,5 +1,5 @@
 /**
- * @file pl20.cpp
+ * @file plxx.cpp
  *
  * https://github.com/helioz2000/pl20
  *
@@ -11,7 +11,7 @@
  *      INCLUDES
  *********************/
 
-#include "pl20.h"
+#include "plxx.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -32,23 +32,23 @@
 using namespace std;
 
 /* PL20 comms */
-#define PL20_CMD_RD_RAM 20		// Read from processor RAM
-#define PL20_CMD_RD_EEPROM 72	// Read from EEPROM
-#define PL20_CMD_WR_RAM 152		// Write to processor RAM
-#define PL20_CMD_WR_EEPROM 202	// Write to EEPROM
-#define PL20_CMD_PUSH 87		// Short push or long push
+#define PL_CMD_RD_RAM 20		// Read from processor RAM
+#define PL_CMD_RD_EEPROM 72	// Read from EEPROM
+#define PL_CMD_WR_RAM 152		// Write to processor RAM
+#define PL_CMD_WR_EEPROM 202	// Write to EEPROM
+#define PL_CMD_PUSH 87		// Short push or long push
 
 
 /*********************
  * MEMBER FUNCTIONS
  *********************/
  
-Pl20::Pl20() {
+Plxx::Plxx() {
 	printf("%s\n", __func__);
 	throw runtime_error("Class Pl20 - forbidden constructor");
 }
 
-Pl20::Pl20(const char* ttyDeviceStr, int baud) {
+Plxx::Plxx(const char* ttyDeviceStr, int baud) {
 	if (ttyDeviceStr == NULL) {
 		throw invalid_argument("Class Pl20 - ttyDeviceStr is NULL");
 	}
@@ -56,17 +56,17 @@ Pl20::Pl20(const char* ttyDeviceStr, int baud) {
 	this->_ttyBaud = baud;
 }
 
-Pl20::~Pl20() {
+Plxx::~Plxx() {
 	
 }
 
-int Pl20::read_RAM(unsigned char address, unsigned char *readValue) {
+int Plxx::read_RAM(unsigned char address, unsigned char *readValue) {
 	unsigned char value;
 	
 	if (_tty_open() < 0) 
 		return -1;
 
-	if (_tty_write(address, PL20_CMD_RD_RAM) < 0)
+	if (_tty_write(address, PL_CMD_RD_RAM) < 0)
 		goto return_fail;
 
 	if (_tty_read(&value) < 0)
@@ -80,7 +80,7 @@ return_fail:
 	return -1;
 }
 
-int Pl20::_tty_open() {
+int Plxx::_tty_open() {
 
 	this->_ttyFd = open(this->_ttyDevice.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
 	if (_ttyFd < 0) {
@@ -96,13 +96,13 @@ int Pl20::_tty_open() {
 	return 0;
 }
 
-void Pl20::_tty_close() {
+void Plxx::_tty_close() {
 	close(this->_ttyFd);
 	this->_ttyFd = -1;
 }
 
 
-int Pl20::_tty_set_attribs(int fd, int speed)
+int Plxx::_tty_set_attribs(int fd, int speed)
 {
     struct termios tty;
 
@@ -137,7 +137,7 @@ int Pl20::_tty_set_attribs(int fd, int speed)
     return 0;
 }
 
-int Pl20::_tty_write(unsigned char address, unsigned char cmd) {
+int Plxx::_tty_write(unsigned char address, unsigned char cmd) {
 	int wrLen;
 	unsigned char txbuf[10];
 	txbuf[0] = cmd;
@@ -154,8 +154,8 @@ int Pl20::_tty_write(unsigned char address, unsigned char cmd) {
 	return 0;
 }
 
-/* read PL20 reply */
-int Pl20::_tty_read(unsigned char *value) {
+/* read PLxx reply */
+int Plxx::_tty_read(unsigned char *value) {
 	int rxlen = 0;
 	int rdlen;
 	unsigned char buf[80];

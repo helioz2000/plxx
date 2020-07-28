@@ -1,15 +1,15 @@
 /**
- * @file pl20.h
+ * @file plxx.h
 
 -----------------------------------------------------------------------------
- This class provides encapsulation for Plasmatronics PL20 solar charge 
+ This class provides encapsulation for Plasmatronics PL20/40/60 solar charge 
  controller.
 
 -----------------------------------------------------------------------------
 */
 
-#ifndef _PL20_H_
-#define _PL20_H_
+#ifndef _PLXX_H_
+#define _PLXX_H_
 
 /*********************
  *      INCLUDES
@@ -33,11 +33,11 @@
  *      CLASS
  **********************/
 
-class Pl20 {
+class Plxx {
 public:
-	Pl20();		// empty constructor throws error
-	Pl20(const char* ttyDeviceStr, int baud);
-	~Pl20();
+	Plxx();		// empty constructor throws error
+	Plxx(const char* ttyDeviceStr, int baud);
+	~Plxx();
 	int read_RAM(unsigned char address, unsigned char *readValue);
 private:
 	int _tty_open();
@@ -52,4 +52,4 @@ private:
 
 };
 
-#endif /* _PL20_H_ */
+#endif /* _PLXX_H_ */

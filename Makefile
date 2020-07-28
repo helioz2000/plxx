@@ -1,11 +1,11 @@
 #
 # Makefile
 #
-BIN_READ = pl20_read
+BIN_READ = plxx_read
 BINDIR = /usr/local/sbin/
 DESTDIR = /usr
 PREFIX = /local
-SERVICE = pl20d.service
+SERVICE = plxxd.service
 SERVICEDIR = /etc/systemd/system
 
 # modbus header files could be located in different directories

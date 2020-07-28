@@ -1,5 +1,5 @@
 /**
- * @file pl20_read.cpp
+ * @file plxx_read.cpp
  *
  * https://github.com/helioz2000/pl20
  *
@@ -30,7 +30,7 @@
 #include <iostream>
 #include <string>
 
-#include "pl20.h"
+#include "plxx.h"
 
 using namespace std;
 //using namespace libconfig;
@@ -44,7 +44,7 @@ static string ttyDeviceStr = "/dev/ttyUSB0" ;
 static int address = 50;
 static int ttyBaudrate;
 
-Pl20 *pl20; //("/dev/ttyUSB0", B9600);
+Plxx *pl; //("/dev/ttyUSB0", B9600);
 
 /**
  * log to console and syslog for daemon
@@ -166,9 +166,9 @@ int main (int argc, char *argv[])
 	//if (runningAsDaemon)
 	//	signal (SIGINT, sigHandler);
 
-	pl20 = new Pl20(ttyDeviceStr.c_str(), getBaudrate(ttyBaudrate));
+	pl = new Plxx(ttyDeviceStr.c_str(), getBaudrate(ttyBaudrate));
 
-	if ( pl20->read_RAM((unsigned char) address, &value) < 0)
+	if ( pl->read_RAM((unsigned char) address, &value) < 0)
 		goto exit_fail;
 
 	printf("Address %d contains %d\n", address, value);
