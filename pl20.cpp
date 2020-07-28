@@ -175,10 +175,8 @@ int Pl20::_tty_read(unsigned char *value) {
 		perror("select()");
 		return -1;
 	}
-	if (select_result) {
-		printf("Data is available now.\n");
-	} else {
-		printf("No data within timeout.\n");
+	if (!select_result) {
+		perror("No data within timeout.\n");
 		return -1;
 	}
 
@@ -187,15 +185,15 @@ int Pl20::_tty_read(unsigned char *value) {
 		if (rdlen > 0) {
 			rxlen += rdlen;
 			if  (buf[0] != 200) {
-			printf("Error response expected:%d received:%d\n", 200, buf[0]);
+			fprintf(stderr, "Error response expected:%d received:%d\n", 200, buf[0]);
 			return -1;
 			}
 			*value = buf[1];
 		} else if (rdlen < 0) {
-			printf("Error from read: %d: %s\n", rdlen, strerror(errno));
+			fprintf(stderr, "Error from read: %d: %s\n", rdlen, strerror(errno));
 			return -1;
 		} else {  /* rdlen == 0 */
-			printf("Timeout from read\n");
+			perror("Timeout from read\n");
 			return -1;
 		}
 	} while (rxlen < 2);

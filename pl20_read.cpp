@@ -20,13 +20,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <string>
 #include <termios.h>
 #include <syslog.h>
 #include <sys/utsname.h>
 #include <sys/select.h>
 #include <time.h>
 #include <unistd.h>
+
+#include <iostream>
+#include <string>
 
 #include "pl20.h"
 
@@ -38,11 +40,11 @@ bool runningAsDaemon = false;
 std::string processName;
 
 static string execName;
-static string ttyDeviceStr;
-static int address;
+static string ttyDeviceStr = "/dev/ttyUSB0" ;
+static int address = 50;
 static int ttyBaudrate;
 
-Pl20 pl20("/dev/ttyUSB0", B9600);
+Pl20 *pl20; //("/dev/ttyUSB0", B9600);
 
 /**
  * log to console and syslog for daemon
@@ -88,18 +90,21 @@ int getBaudrate(int baud) {
 		case 1200: return B1200;
 			break;
 		case 2400: return B2400;
-			break
+			break;
 		default: return B9600;
 	}
 }
 
 static void showUsage(void) {
 	cout << "usage:" << endl;
-	cout << execName << "-aAddress -pSerialDevice -bBaudrate -h" << endl;
-	cout << "a = Address to read from PL device (e.g 50)" << endl;
+	cout << execName << " -aAddress -pSerialDevice -bBaudrate -h" << endl;
+	cout << "a = Address to read from PL device (e.g 50)[0-255]" << endl;
 	cout << "s = Serial device (e.g. /dev/ttyUSB0)" << endl;
-	cout << "b = Baudrate (e.g. 9600)" << endl;
+	cout << "b = Baudrate (e.g. 9600) [300|1200|2400|9600]" << endl;
 	cout << "h = Display help" << endl;
+	cout << "default device is /etc/ttyUSB0" << endl;
+	cout << "default baudrate is 9600" << endl;
+	cout << "default address is 50 (Battery Voltage)" << endl;
 }
 
 
@@ -118,14 +123,14 @@ bool parseArguments(int argc, char *argv[]) {
 				switch (buffer[1]) {
 				case 'a':
 					str = std::string(&buffer[2]);
-					address = std:stoi( str );
+					address = std::stoi( str );
 					break;
 				case 's':
 					ttyDeviceStr = std::string(&buffer[2]);
 					break;
 				case 'b':
 					str = std::string(&buffer[2]);
-					ttyBaudrate = std:stoi( str );
+					ttyBaudrate = std::stoi( str );
 					break;
 				case 'h':
 					showUsage();
@@ -155,18 +160,18 @@ int main (int argc, char *argv[])
 
 	if (! parseArguments(argc, argv) ) goto exit_fail;
 	
-	printf("%s %d Address: %d", ttyDeviceStr.c_str(),ttyBaudrate ,address);
-
 	//log(LOG_INFO,"[%s] PID: %d PPID: %d", argv[0], getpid(), getppid());
 	//log(LOG_INFO,"Version %d.%02d [%s] ", version_major, version_minor, build_date_str);
 
 	//if (runningAsDaemon)
 	//	signal (SIGINT, sigHandler);
 
-	if ( pl20.read_RAM((unsigned char) address, &value) < 0)
+	pl20 = new Pl20(ttyDeviceStr.c_str(), getBaudrate(ttyBaudrate));
+
+	if ( pl20->read_RAM((unsigned char) address, &value) < 0)
 		goto exit_fail;
 
-	printf("Reply: %d\n", value);
+	printf("Address %d contains %d\n", address, value);
 
 	exit(EXIT_SUCCESS);
 

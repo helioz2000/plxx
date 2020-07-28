@@ -1,7 +1,7 @@
 #
 # Makefile
 #
-BIN = pl20_read
+BIN_READ = pl20_read
 BINDIR = /usr/local/sbin/
 DESTDIR = /usr
 PREFIX = /local
@@ -20,7 +20,8 @@ CFLAGS += -O3 -g3 $(INC)
 # directory for local libs
 LDFLAGS = -L$(DESTDIR)$(PREFIX)/lib
 #LIBS += -lstdc++ -lm -lmosquitto -lconfig++ -lmodbus
-LIBS += -lstdc++ -lm -lmosquitto
+#LIBS += -lstdc++ -lm -lmosquitto
+LIBS_READ += -lstdc++
 
 #VPATH =
 
@@ -41,7 +42,7 @@ OBJS = $(COBJS) $(CPPOBJS)
 
 #.PHONY: clean
 
-all: default
+all: read
 
 $(OBJDIR)/%.o: %.c
 	@mkdir -p $(OBJDIR)
@@ -52,6 +53,9 @@ $(OBJDIR)/%.o: %.cpp
 	@mkdir -p $(OBJDIR)
 	@echo "CXX $<"
 	@$(CXX)  $(CFLAGS) -c $< -o $@
+
+read: $(OBJS)
+	$(CC) -o $(BIN_READ) $(OBJS) $(LDFLAGS) $(LIBS_READ)
 
 default: $(OBJS)
 	$(CC) -o $(BIN) $(OBJS) $(LDFLAGS) $(LIBS)
@@ -66,11 +70,15 @@ clean:
 	rm -f $(OBJS)
 
 install:
-	install -o root $(BIN) $(BINDIR)$(BIN)
+ifneq ($(shell id -u), 0)
+	@echo "!!!! install requires root !!!!"
+else
+	install -o root $(BIN_READ) $(BINDIR)$(BIN_READ)
 	@echo ++++++++++++++++++++++++++++++++++++++++++++
-	@echo ++ $(BIN) has been installed in $(BINDIR)
-	@echo ++ systemctl start $(BIN)
-	@echo ++ systemctl stop $(BIN)
+	@echo ++ $(BIN_READ) has been installed in $(BINDIR)
+#	@echo ++ systemctl start $(BIN)
+#	@echo ++ systemctl stop $(BIN)
+endif
 
 # make systemd service
 service:
