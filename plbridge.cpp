@@ -30,11 +30,10 @@
 
 #include <libconfig.h++>
 #include <mosquitto.h>
-//#include <modbus.h>
 
 #include "mqtt.h"
 //#include "datatag.h"
-//#include "modbustag.h"
+#include "plxx.h"
 #include "plbridge.h"
 
 using namespace std;
@@ -58,7 +57,6 @@ static string execName;
 static string mbSlaveStatusTopic;
 bool exitSignal = false;
 bool debugEnabled = false;
-int modbusDebugLevel = 0;
 bool mqttDebugEnabled = false;
 bool runningAsDaemon = false;
 time_t mqtt_connect_time = 0;   // time the connection was initiated
@@ -80,6 +78,8 @@ int mbMaxRetries = 0;					// number of retries on modbus error (config file)
 #define MODBUS_SLAVE_MIN 1			// lowest permitted slave ID
 bool mbSlaveOnline[MODBUS_SLAVE_MAX+1];			// array to store online/offline status
 
+Plxx *pl;
+
 #pragma mark Proto types
 void subscribe_tags(void);
 void mqtt_connection_status(bool status);
@@ -90,9 +90,9 @@ void setMainLoopInterval(int newValue);
 //bool modbus_read_holding_registers(int slaveId, modbus_t *ctx, int addr, int nb, uint16_t *dest);
 //bool modbus_write_tag(ModbusTag *tag);
 //void modbus_write_request(int callbackId, Tag *tag);
-bool mqtt_publish_tag(ModbusTag *tag);
+//bool mqtt_publish_tag(ModbusTag *tag);
 
-TagStore ts;
+//TagStore ts;
 MQTT mqtt;
 Config cfg;			// config file
 //Hardware hw(false);	// no screen
@@ -227,41 +227,17 @@ bool cfg_get_str(const std::string &path, std::string &value) {
  */
 bool var_process(void) {
     bool retval = false;
-    time_t now = time(NULL);
-//    if (now > var_process_time) {
-//        var_process_time = now + VAR_PROCESS_INTERVAL;
-
-	// update CPU temperature
-	Tag *tag = ts.getTag(cpu_temp_topic.c_str());
-	if (tag != NULL) {
-		// read time due ?
-		if (tag->nextReadTime <= now) {
-			//tag->setValue(hw.read_cpu_temp());
-			tag->nextReadTime = now + tag->readInterval;
-		retval = true;
-		}
-		// publish time due ?
-		if (tag->nextPublishTime <= now) {
-			if (mqtt.isConnected()) {
-				mqtt.publish(tag->getTopic(), "%.1f", tag->floatValue(), tag->getPublishRetain() );
-				retval = true;
-			}
-			tag->nextPublishTime = now + tag->publishInterval;
-		}
-	}
-    // reconnect mqtt if required
-    /*if (!mqtt.isConnected() && !mqtt_connection_in_progress) {
-        mqtt_connect();
-    }*/
+    //time_t now = time(NULL);
     return retval;
 }
+
 
 /**
  * process modbus write
  * only one write function is processed per call
  * @return false if there was nothing to process, otherwise true
  */
-bool modbus_write_process() {
+/*bool modbus_write_process() {
 	int idx = 0;
 	uint8_t slaveId = mbWriteTags[idx].getSlaveId();
 	while ((slaveId >= MODBUS_SLAVE_MIN) && (slaveId <= MODBUS_SLAVE_MAX)) {
@@ -275,7 +251,7 @@ bool modbus_write_process() {
 		slaveId = mbWriteTags[idx].getSlaveId();
 	}
 	return false;
-}
+}*/
 
 /**
  * modbus read group of tags
@@ -287,7 +263,7 @@ bool modbus_write_process() {
  * @param refTime: time reference to identify already read tags
  * @returns true if group of tags have been read, false if tag is not in a group or a failure has occured
  */
-bool modbus_read_multi_tags(int *tagArray, int arrayIndex, time_t refTime) {
+/*bool modbus_read_multi_tags(int *tagArray, int arrayIndex, time_t refTime) {
 	ModbusTag *t = &mbReadTags[tagArray[arrayIndex]];
 	ModbusTag tag;
 	ModbusTag *tp;
@@ -373,48 +349,54 @@ bool modbus_read_multi_tags(int *tagArray, int arrayIndex, time_t refTime) {
 	mqtt_publish_tag(t);
 	delete [] mbReadRegisters;
 	if (noread) return false;
+
 	return true;	// indicate that tag has been processed
-}
+}*/
 
 /**
  * process modbus cyclic read update
  * @return false if there was nothing to process, otherwise true
  */
-bool modbus_read_process() {
+bool pl_read_process() {
 	int index = 0;
 	int tagIndex = 0;
 	int *tagArray;
 	bool retval = false;
 	time_t now = time(NULL);
-	time_t refTime;
+
+	//time_t refTime;
 	while (updateCycles[index].ident >= 0) {
 		// ignore if cycle has no tags to process
 		if (updateCycles[index].tagArray == NULL) {
+			//printf("%s - no tags in index: %d\n", __FUNCTION__, index);
 			index++; continue;
 		}
+
 		// new reference time for each read cycle
-		refTime = time(NULL);		// used for group reads
+		//refTime = time(NULL);		// used for group reads
 		if (now >= updateCycles[index].nextUpdateTime) {
 			// set next update cycle time
 			updateCycles[index].nextUpdateTime = now + updateCycles[index].interval;
 			// get array for tags
 			tagArray = updateCycles[index].tagArray;
-			// read each tag in the array
-			tagIndex = 0;
-			while (tagArray[tagIndex] >= 0) {
-				// if tag is not part of a group ....
-				if (!modbus_read_multi_tags(tagArray, tagIndex, refTime))
-					// perform single tag read
-					modbus_read_tag(&mbReadTags[tagArray[tagIndex]]);
-				tagIndex++;
-				usleep(modbusinterslavedelay);
+			if (tagArray != NULL) {
+				// read each tag in the array
+				tagIndex = 0;
+				while (tagArray[tagIndex] >= 0) {
+					// if tag is not part of a group ....
+					//if (!modbus_read_multi_tags(tagArray, tagIndex, refTime))
+						// perform single tag read
+					//	modbus_read_tag(&mbReadTags[tagArray[tagIndex]]);
+					tagIndex++;
+					//usleep(modbusinterslavedelay);
+				}
 			}
 			retval = true;
-			//cout << now << " Update Cycle: " << updateCycles[index].ident << " - " << updateCycles[index].tagArraySize << " tags" << endl;
+			cout << now << " Update Cycle: " << updateCycles[index].ident << " - " << updateCycles[index].tagArraySize << " tags" << endl;
 		}
 		index++;
 	}
-	
+
 	return retval;
 }
 
@@ -426,8 +408,8 @@ bool modbus_read_process() {
 bool process() {
 	bool retval = false;
 	if (mqtt.isConnected()) {
-		if (modbus_read_process()) retval = true;
-		if (modbus_write_process()) retval = true;
+		if (pl_read_process()) retval = true;
+//		if (modbus_write_process()) retval = true;
 	}
 	var_process();	// don't want it in time measuring, doesn't take up much time
 	return retval;
@@ -463,12 +445,12 @@ bool init_values(void)
 bool init_hwtags(void)
 {
 
-	Tag* tp = NULL;
+//	Tag* tp = NULL;
 	std::string topicPath;
 
 	// CPU temperature (optional, may not exist)
 	if (cfg.lookupValue("cputemp.topic", topicPath)) {
-		cpu_temp_topic = topicPath;
+/*		cpu_temp_topic = topicPath;
 		tp = ts.addTag(topicPath.c_str());
 		tp->publishInterval = 0;
 		if (!cfg_get_int("cputemp.readinterval", tp->readInterval)) return false;
@@ -479,6 +461,7 @@ bool init_hwtags(void)
 			tp->setPublish();
 			tp->nextPublishTime = time(NULL) + tp->publishInterval;
 		}
+*/
 	}
 	return true;
 }
@@ -487,18 +470,20 @@ bool init_hwtags(void)
  * @return false on failure
  */
 bool init_tags(void) {
-	Tag* tp = NULL;
+//	Tag* tp = NULL;
 	std::string strValue;
-	int numTags, iVal, i;
-	bool bVal;
+//	int numTags, iVal, i;
+//	bool bVal;
 
 	if (!init_hwtags()) return false;
 	if (!cfg.exists("mqtt_tags")) {	// optional
 		log(LOG_NOTICE,"configuration - parameter \"mqtt_tags\" does not exist");
 		return true;
 		}
+/*
 	Setting& mqttTagsSettings = cfg.lookup("mqtt_tags");
 	numTags = mqttTagsSettings.getLength();
+
 	mbWriteTags = new ModbusTag[numTags+1];
 	//printf("%s - %d mqtt tags found\n", __func__, numTags);
 	for (i=0; i < numTags; i++) {
@@ -524,6 +509,7 @@ bool init_tags(void) {
 	mbWriteTags[i].setSlaveId(MODBUS_SLAVE_MAX +1);
 	mbWriteTags[i].setUpdateCycleId(-1);
 	//printf("%s - allocated %d tags, last is index %d\n", __func__, i, i-1);
+*/
 	return true;
 }
 
@@ -562,7 +548,7 @@ bool mqtt_init(void) {
  */
 void mqtt_subscribe_tags(void) {
 	//printf("%s - Start\n", __func__);
-	Tag* tp = ts.getFirstTag();
+/*	Tag* tp = ts.getFirstTag();
 	while (tp != NULL) {
 		if (tp->isSubscribe()) {
 			//printf("%s: %s\n", __func__, tp->getTopic());
@@ -571,6 +557,7 @@ void mqtt_subscribe_tags(void) {
 		tp = ts.getNextTag();
 	}
 	//printf("%s - Done\n", __func__);
+*/
 }
 
 /**
@@ -610,13 +597,13 @@ void mqtt_connection_status(bool status) {
  */
 void mqtt_topic_update(const struct mosquitto_message *message) {
 	//printf("%s - %s %s\n", __func__, topic, value);
-	Tag *tp = ts.getTag(message->topic);
+/*	Tag *tp = ts.getTag(message->topic);
 	if (tp == NULL) {
 		fprintf(stderr, "%s: <%s> not  in ts\n", __func__, message->topic);
 	} else {
 		tp->setValueIsRetained(message->retain);
 		tp->setValue((const char*)message->payload);	// This will trigger a callback to modbus_write_request
-	}
+	}*/
 }
 
 /**
@@ -624,6 +611,7 @@ void mqtt_topic_update(const struct mosquitto_message *message) {
  * @param tag: ModbusTag to publish
  * 
  */
+/*
 bool mqtt_publish_tag(ModbusTag *tag) {
 	if (!mqtt.isConnected()) return false;
 	if (tag->getTopicString().empty()) return true;	// don't publish if topic is empty
@@ -649,6 +637,7 @@ bool mqtt_publish_tag(ModbusTag *tag) {
 	
 	return true;
 }
+*/
 
 /**
  * Publish noread value to all tags (normally done on program exit)
@@ -659,7 +648,7 @@ void mqtt_clear_tags(bool publish_noread = true, bool clear_retain = true) {
 
 	int index = 0, tagIndex = 0;
 	int *tagArray;
-	ModbusTag mbTag;
+//	ModbusTag mbTag;
 	//printf("%s", __func__);
 	
 	// Iterate over modbus array
@@ -674,18 +663,19 @@ void mqtt_clear_tags(bool publish_noread = true, bool clear_retain = true) {
 		// read each tag in the array
 		tagIndex = 0;
 		while (tagArray[tagIndex] >= 0) {
-			mbTag = mbReadTags[tagArray[tagIndex]];
-			if (publish_noread)
-				mqtt.publish(mbTag.getTopic(), mbTag.getFormat(), mbTag.getNoreadValue(), mbTag.getPublishRetain());
+//			mbTag = mbReadTags[tagArray[tagIndex]];
+			if (publish_noread) {}
+//				mqtt.publish(mbTag.getTopic(), mbTag.getFormat(), mbTag.getNoreadValue(), mbTag.getPublishRetain());
 				//mqtt_publish_tag(mbTag, true);			// publish noread value
-			if (clear_retain)
-				mqtt.clear_retained_message(mbTag.getTopic());	// clear retained status
+			if (clear_retain) {}
+//				mqtt.clear_retained_message(mbTag.getTopic());	// clear retained status
 			tagIndex++;
 		}
 		index++;
 	}	// while 
 
 	// Iterate over local tags (e.g. CPU temp)
+/*
 	Tag *tag = ts.getFirstTag();
 	while (tag != NULL) {
 		if (tag->isPublish()) {
@@ -693,20 +683,58 @@ void mqtt_clear_tags(bool publish_noread = true, bool clear_retain = true) {
 		}
 		tag = ts.getNextTag();
 	}
+*/
 }
 
 #pragma mark PLxx
+
+/**
+ * read update cycles from config file
+ */
+bool pl_config_updatecycles(Setting& updateCyclesSettings) {
+	int idValue, interval, index;
+	int numUpdateCycles = updateCyclesSettings.getLength();
+
+	if (numUpdateCycles < 1) {
+		log(LOG_ERR, "Error in config file, \"updatecycles\" missing");
+		return false;
+	}
+
+	// allocate array
+	updateCycles = new updatecycle[numUpdateCycles+1];
+
+	for (index = 0; index < numUpdateCycles; index++) {
+		if (updateCyclesSettings[index].lookupValue("id", idValue)) {
+		} else {
+			log(LOG_ERR, "Config error - cycleupdate ID missing in entry %d", index+1);
+			return false;
+		}
+		if (updateCyclesSettings[index].lookupValue("interval", interval)) {
+		} else {
+			log(LOG_ERR, "Config error - cycleupdate interval missing in entry %d", index+1);
+			return false;
+		}
+		updateCycles[index].ident = idValue;
+		updateCycles[index].interval = interval;
+		updateCycles[index].nextUpdateTime = time(0) + interval;
+		cout << "Update " << index << " ID " << idValue << " Interval: " << interval << " t:" << updateCycles[index].nextUpdateTime << endl;
+	}
+	// mark end of data
+	updateCycles[index].ident = -1;
+	updateCycles[index].interval = -1;
+
+	return true;
+}
 
 
 /**
  * read PLxx configuration from config file
  */
-
 bool pl_config() {
 	// Configure update cycles
 	try {
 		Setting& updateCyclesSettings = cfg.lookup("updatecycles");
-		if (!modbus_config_updatecycles(updateCyclesSettings)) {
+		if (!pl_config_updatecycles(updateCyclesSettings)) {
 			return false; }
 	} catch (const SettingNotFoundException &excp) {
 		log(LOG_ERR, "Error in config file <%s> not found", excp.getPath());
@@ -715,7 +743,8 @@ bool pl_config() {
 		log(LOG_ERR, "Error in config file <%s> is wrong type", excp.getPath());
 		return false;
 	}
-	
+
+/*	
 	// Configure modbus slaves
 	try {
 		Setting& mbSlavesSettings = cfg.lookup("mbslaves");
@@ -733,9 +762,26 @@ bool pl_config() {
 	} catch (...) {
 		log(LOG_ERR, "modbus_config <mbslaves> Error in config file (exception)");
 		return false;
-	}
+	} */
 	return true;
 }
+
+/**
+ * get a valid baudrate for PLxx controller
+ * @returns budrate constant from termios.h
+ */
+int pl_baudrate(int baud) {
+	switch (baud) {
+		case 300: return B300;
+			break;
+		case 1200: return B1200;
+			break;
+		case 2400: return B2400;
+			break;
+		default: return B9600;
+	}
+}
+
 
 /**
  * initialize modbus
@@ -743,99 +789,33 @@ bool pl_config() {
  */
 bool init_pl()
 {
-	//char str[256];
-	string rtu_port;
+	string pl_device;
 	string strValue;
-	int port_baud = 9600;
-	uint32_t response_to_sec = 0;
-	uint32_t response_to_usec = 0;
-	int newValue;
-	//bool boolValue;
-	
+	int pl_baud = 9600;
+
 	// check if mobus serial device is configured
-	if (!cfg_get_str("modbusrtu.device", rtu_port)) {
+	if (!cfg_get_str("plxx.device", pl_device)) {
 		return true;
 	}
 	// get configuration serial device
-	if (!cfg_get_int("modbusrtu.baudrate", port_baud)) {
-			log(LOG_ERR, "Modbus RTU missing \"baudrate\" parameter for <%s>", rtu_port.c_str());
+	if (!cfg_get_int("plxx.baudrate", pl_baud)) {
+			log(LOG_ERR, "plxx missing \"baudrate\" parameter for <%s>", pl_device.c_str());
 		return false;
-	}
-	
-	// Create modbus context
-	mb_ctx = modbus_new_rtu(rtu_port.c_str(), port_baud, 'N', 8, 1);
-	
-	if (mb_ctx == NULL) {
-		log(LOG_ERR, "Unable to allocate libmodbus context");
-		return false;
-	}
-	
-	if (!runningAsDaemon) {
-		if (cfg_get_int("modbusrtu.debuglevel", newValue)) {
-			modbusDebugLevel = newValue;
-			if (modbusDebugLevel > 0) {
-				printf("%s - Modbus Debug Level %d\n", __func__, modbusDebugLevel);
-				if (modbus_get_response_timeout(mb_ctx, &response_to_sec, &response_to_usec) >= 0) {
-					printf("%s default response timeout %ds %dus\n", __func__, response_to_sec, response_to_usec);
-				}
-			}
-			// enable libmodbus debugging
-			if (modbusDebugLevel > 1) modbus_set_debug(mb_ctx, TRUE);
-		}
-	}
-	
-	// set slave status reporting topic
-	if (cfg.lookupValue("modbusrtu.slavestatustopic", strValue)) {
-		mbSlaveStatusTopic = strValue;
-		//printf("%s - mbSlaveStatusTopic: %s\n", __func__, mbSlaveStatusTopic.c_str());
-	}
-	
-	if (cfg_get_int("modbusrtu.maxretries", newValue)) {
-		mbMaxRetries = newValue;
-	}
-	// set new response timeout if configured
-	if (cfg_get_int("modbusrtu.responsetimeout_us", newValue)) {
-		response_to_usec = newValue;
-	}
-	if (cfg_get_int("modbusrtu.responsetimeout_s", newValue)) {
-		response_to_sec = newValue;
-	}
-	if ((response_to_usec > 0) || (response_to_sec > 0)) {
-		modbus_set_response_timeout(mb_ctx, response_to_sec, response_to_usec);
-		if (modbusDebugLevel > 0) {
-			if (modbus_get_response_timeout(mb_ctx, &response_to_sec, &response_to_usec) >= 0) {
-				log(LOG_INFO, "%s custom response timeout %ds %dus", __func__, response_to_sec, response_to_usec);
-			}
-		}
-	}
-	
-	if (cfg_get_int("modbusrtu.interslavedelay", newValue)) {
-		modbusinterslavedelay = newValue;
-		if (modbusDebugLevel > 0) {
-			log(LOG_INFO, "%s modbus inter slave delay: %dus", __func__, modbusinterslavedelay);
-		}
 	}
 
-	
-	//modbus_set_error_recovery(mb_ctx, modbus_error_recovery_mode(MODBUS_ERROR_RECOVERY_LINK | MODBUS_ERROR_RECOVERY_PROTOCOL));
-	
-	// Attempt to open serial device
-	if (modbus_connect(mb_ctx) == -1) {
-		log(LOG_ERR, "Connection to %s failed: %s\n", rtu_port.c_str(), modbus_strerror(errno));
-		modbus_free(mb_ctx);
-		mb_ctx = NULL;
+	// Create PL object
+	pl = new Plxx(pl_device.c_str(), pl_baudrate(pl_baud));
+
+	if (pl == NULL) {
+		log(LOG_ERR, "Can't initialize PLxx on %s\n", pl_device.c_str());
 		return false;
 	}
-	
-	log(LOG_INFO, "Modbus RTU opened on port %s at %d baud", rtu_port.c_str(), port_baud);
-	
-	if (!modbus_config()) return false;
-	if (!modbus_assign_updatecycles()) return false;
-	
-	// all slaves start life in offline mode
-	for (int i=0; i <= MODBUS_SLAVE_MAX; i++)
-		mbSlaveOnline[i] = false;
-	
+
+	log(LOG_INFO, "PL connection opened on port %s at %d baud", pl_device.c_str(), pl_baud);
+
+	if (!pl_config()) return false;
+//	if (!modbus_assign_updatecycles()) return false;
+
 	return true;
 }
 
@@ -865,23 +845,7 @@ void setMainLoopInterval(int newValue)
 void exit_loop(void) 
 {
 	bool bValue, clearonexit = false, noreadonexit = false;
-	
-	// set all modbus slaves as offline and publish new status
-	for (int i=0; i <= MODBUS_SLAVE_MAX; i++) {
-		// only if they are online, no change if they are already offline
-		if (mbSlaveOnline[i]) {
-			modbus_slave_set_online_status(i, false);
-		}
-	}
-	
-	// close modbus device
-	if (mb_ctx != NULL) {
-		modbus_close(mb_ctx);
-		modbus_free(mb_ctx);
-		mb_ctx = NULL;
-		cout << "Modbus closed" << endl;
-	}
-	
+
 	// how to handle mqtt broker published tags 
 	// clear retain status for all tags?
 	if (cfg.lookupValue("mqtt.clearonexit", bValue))
@@ -899,13 +863,12 @@ void exit_loop(void)
 		if (ar != NULL) delete [] ar;		// delete array if one exists
 		idx++;
 	}
-	
+
 	delete [] updateCycles;
-	delete [] mbWriteTags;
-	delete [] mbReadTags;
 }
 
-/** Main program loop
+/** 
+ * Main program loop
  */
 void main_loop()
 {
@@ -917,7 +880,7 @@ void main_loop()
 	useconds_t processing_time;
 	useconds_t min_time = 99999999, max_time = 0;
 	useconds_t interval = mainloopinterval * 1000;	// convert ms to us
-	
+
 	// first call takes a long time (10ms)
 	while (!exitSignal) {
 	// run processing and record start/stop time
@@ -1019,9 +982,6 @@ int main (int argc, char *argv[])
 
 	log(LOG_INFO,"[%s] PID: %d PPID: %d", argv[0], getpid(), getppid());
 	log(LOG_INFO,"Version %d.%02d [%s] ", version_major, version_minor, build_date_str);
-
-	signal (SIGINT, sigHandler);
-	//signal (SIGHUP, sigHandler);
 
 	// catch SIGTERM only if running as daemon (started via systemctl)
 	// when run from command line SIGTERM provides a last resort method

@@ -21,7 +21,7 @@ CFLAGS += -O3 $(INC)
 # directory for local libs
 LDFLAGS = -L$(DESTDIR)$(PREFIX)/lib
 #LIBS += -lstdc++ -lm -lmosquitto -lconfig++ -lmodbus
-#LIBS_BRIDGE += -lstdc++ -lm -lmosquitto
+LIBS += -lstdc++ -lm -lmosquitto -lconfig++
 #LIBS_READ += -lstdc++
 
 #VPATH =
@@ -68,7 +68,7 @@ read: $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o
 	$(CXX) -o $(BIN_READ) $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o $(LDFLAGS)
 
 bridge: $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o
-	$(CXX) -o $(BIN_BRIDGE) $(OBJDIR)/plxx.o $(OBJDIR)/plbidge.o $(OBJDIR)/mqtt.o $(LDFLAGS) $(LIBS_BRIDGE)
+	$(CXX) -o $(BIN_BRIDGE) $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(LDFLAGS) $(LIBS)
 
 #default: $(OBJS)
 #	$(CC) -o $(BIN) $(OBJS) $(LDFLAGS) $(LIBS)
