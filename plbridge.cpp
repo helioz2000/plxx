@@ -5,6 +5,9 @@
  *
  * Author: Erwin Bejsta
  * July 2020
+ *
+ * Uses ModbusTag class for PLxx values
+ * 
  */
 
 /*********************
@@ -32,7 +35,7 @@
 #include <mosquitto.h>
 
 #include "mqtt.h"
-//#include "datatag.h"
+#include "modbustag.h"
 #include "plxx.h"
 #include "plbridge.h"
 
@@ -73,10 +76,10 @@ updatecycle *updateCycles = NULL;	// array of update cycle definitions
 //ModbusTag *mbWriteTags = NULL;			// array of all modbus write tags
 int mbTagCount = -1;
 uint32_t modbusinterslavedelay = 0;	// delay between modbus transactions
-int mbMaxRetries = 0;					// number of retries on modbus error (config file)
-#define MODBUS_SLAVE_MAX 254		// highest permitted slave ID
-#define MODBUS_SLAVE_MIN 1			// lowest permitted slave ID
-bool mbSlaveOnline[MODBUS_SLAVE_MAX+1];			// array to store online/offline status
+//int mbMaxRetries = 0;					// number of retries on modbus error (config file)
+//#define MODBUS_SLAVE_MAX 254		// highest permitted slave ID
+//#define MODBUS_SLAVE_MIN 1			// lowest permitted slave ID
+//bool mbSlaveOnline[MODBUS_SLAVE_MAX+1];			// array to store online/offline status
 
 Plxx *pl;
 
