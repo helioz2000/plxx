@@ -64,11 +64,13 @@ $(OBJDIR)/plbridge.o: plbridge.h
 
 $(OBJDIR)/mqtt.o: mqtt.h
 
+$(OBJDIR)/modbustag.o: modbustag.h
+
 read: $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o
 	$(CXX) -o $(BIN_READ) $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o $(LDFLAGS)
 
-bridge: $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o
-	$(CXX) -o $(BIN_BRIDGE) $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(LDFLAGS) $(LIBS)
+bridge: $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/mmodbustag.o
+	$(CXX) -o $(BIN_BRIDGE) $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/mmodbustag.o $(LDFLAGS) $(LIBS)
 
 #default: $(OBJS)
 #	$(CC) -o $(BIN) $(OBJS) $(LDFLAGS) $(LIBS)
