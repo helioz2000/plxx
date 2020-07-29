@@ -40,11 +40,11 @@ bool runningAsDaemon = false;
 std::string processName;
 
 static string execName;
-static string ttyDeviceStr = "/dev/ttyUSB0" ;
-static int address = 50;
-static int ttyBaudrate;
+static string ttyDeviceStr = "/dev/ttyUSB0";	// default device
+static int address = 50;						// default address Battery Voltage
+static int ttyBaudrate;							// default baudrate is 9600
 
-Plxx *pl; //("/dev/ttyUSB0", B9600);
+Plxx *pl;
 
 /**
  * log to console and syslog for daemon

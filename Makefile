@@ -16,13 +16,13 @@ SERVICEDIR = /etc/systemd/system
 CC=gcc
 CXX=g++
 CFLAGS = -Wall -Wshadow -Wundef -Wmaybe-uninitialized -Wno-unknown-pragmas
-CFLAGS += -O3 -g3 $(INC)
+CFLAGS += -O3 $(INC)
 
 # directory for local libs
 LDFLAGS = -L$(DESTDIR)$(PREFIX)/lib
 #LIBS += -lstdc++ -lm -lmosquitto -lconfig++ -lmodbus
-LIBS_BRIDGE += -lstdc++ -lm -lmosquitto
-LIBS_READ += -lstdc++
+#LIBS_BRIDGE += -lstdc++ -lm -lmosquitto
+#LIBS_READ += -lstdc++
 
 #VPATH =
 
@@ -32,37 +32,46 @@ LIBS_READ += -lstdc++
 # folder for our object files
 OBJDIR = ./obj
 
-CSRCS += $(wildcard *.c)
-CPPSRCS += $(wildcard *.cpp)
+#CSRCS += $(wildcard *.c)
+#CPPSRCS += $(wildcard *.cpp)
 
-COBJS = $(patsubst %.c,$(OBJDIR)/%.o,$(CSRCS))
-CPPOBJS = $(patsubst %.cpp,$(OBJDIR)/%.o,$(CPPSRCS))
+#COBJS = $(patsubst %.c,$(OBJDIR)/%.o,$(CSRCS))
+#CPPOBJS = $(patsubst %.cpp,$(OBJDIR)/%.o,$(CPPSRCS))
 
-SRCS = $(CSRCS) $(CPPSRCS)
-OBJS = $(COBJS) $(CPPOBJS)
+#SRCS = $(CSRCS) $(CPPSRCS)
+#OBJS = $(COBJS) $(CPPOBJS)
 
-#.PHONY: clean
+.PHONY: clean
 
 all: read
 
-$(OBJDIR)/%.o: %.c
-	@mkdir -p $(OBJDIR)
-	@echo "CC $<"
-	@$(CC)  $(CFLAGS) -c $< -o $@
+#$(OBJDIR)/%.o: %.c
+#	@mkdir -p $(OBJDIR)
+#	@echo "CC $<"
+#	@$(CC)  $(CFLAGS) -c $< -o $@
 
 $(OBJDIR)/%.o: %.cpp
 	@mkdir -p $(OBJDIR)
 	@echo "CXX $<"
 	@$(CXX)  $(CFLAGS) -c $< -o $@
 
-read: $(OBJS)
-	$(CC) -o $(BIN_READ) $(OBJS) $(LDFLAGS) $(LIBS_READ)
+#read: $(OBJS)
+#	$(CC) -o $(BIN_READ) $(OBJS) $(LDFLAGS) $(LIBS_READ)
 
-bridge: $(OBJS)
-	$(CC) -o $(BIN_BRIDGE) $(OBJS) $(LDFLAGS) $(LIBS_BRIDGE)
+$(OBJDIR)/plxx.o: plxx.h
 
-default: $(OBJS)
-	$(CC) -o $(BIN) $(OBJS) $(LDFLAGS) $(LIBS)
+$(OBJDIR)/plbridge.o: plbridge.h
+
+$(OBJDIR)/mqtt.o: mqtt.h
+
+read: $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o
+	$(CXX) -o $(BIN_READ) $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o $(LDFLAGS)
+
+bridge: $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o
+	$(CXX) -o $(BIN_BRIDGE) $(OBJDIR)/plxx.o $(OBJDIR)/plbidge.o $(OBJDIR)/mqtt.o $(LDFLAGS) $(LIBS_BRIDGE)
+
+#default: $(OBJS)
+#	$(CC) -o $(BIN) $(OBJS) $(LDFLAGS) $(LIBS)
 
 #	nothing to do but will print info
 nothing:
@@ -70,7 +79,8 @@ nothing:
 	$(info DONE)
 
 clean:
-	rm -f $(OBJS)
+	rm -f $(OBJDIR)/*.o
+#	rm -f $(OBJS)
 
 install:
 ifneq ($(shell id -u), 0)
@@ -85,7 +95,11 @@ endif
 
 # make systemd service
 service:
+ifneq ($(shell id -u), 0)
+	@echo "!!!! service requires root !!!!"
+else
 	install -o root $(SERVICE) $(SERVICEDIR)
 	@systemctl daemon-reload
 	@systemctl enable $(SERVICE)
-	@echo $(BIN) is now available a systemd service
+	@echo $(BIN_BRIDGE) is now available a systemd service
+endif

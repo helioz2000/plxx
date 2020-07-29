@@ -5,6 +5,7 @@
  This class provides encapsulation for Plasmatronics PL20/40/60 solar charge 
  controller.
 
+
 -----------------------------------------------------------------------------
 */
 

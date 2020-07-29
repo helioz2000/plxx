@@ -37,7 +37,8 @@ using namespace std;
 #define PL_CMD_WR_RAM 152		// Write to processor RAM
 #define PL_CMD_WR_EEPROM 202	// Write to EEPROM
 #define PL_CMD_PUSH 87		// Short push or long push
-
+#define TTY_TIMEOUT_S 1
+#define TTY_TIMEOUT_US 0
 
 /*********************
  * MEMBER FUNCTIONS
@@ -166,8 +167,8 @@ int Plxx::_tty_read(unsigned char *value) {
 
 	FD_ZERO(&rfds);
 	FD_SET(this->_ttyFd, &rfds);
-	tv.tv_sec = 1;
-	tv.tv_usec = 0;
+	tv.tv_sec = TTY_TIMEOUT_S;
+	tv.tv_usec = TTY_TIMEOUT_US;
 
 	select_result = select(this->_ttyFd + 1, &rfds, NULL, NULL, &tv);
 
