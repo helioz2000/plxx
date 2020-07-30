@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/select.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include <string>
@@ -55,17 +56,29 @@ Plxx::Plxx(const char* ttyDeviceStr, int baud) {
 	}
 	this->_ttyDevice = ttyDeviceStr;
 	this->_ttyBaud = baud;
+	this->_ttyFd = -1;
 }
 
 Plxx::~Plxx() {
-	
+	_tty_close();
 }
 
+/**
+ * read value from RAM address
+ * @param address: RAM address of the requested value
+ * @param readValue: pointer to a byte which will hold the value
+ * @returns 0 if successful, -1 on failure
+ */
 int Plxx::read_RAM(unsigned char address, unsigned char *readValue) {
 	unsigned char value;
-	
-	if (_tty_open() < 0) 
-		return -1;
+	struct stat sb;
+
+	// if serial device is not open ....
+	if (fstat(this->_ttyFd, &sb) != 0) {
+		// open serial device
+		if (_tty_open() < 0)
+			return -1;			// failed to open
+	}
 
 	if (_tty_write(address, PL_CMD_RD_RAM) < 0)
 		goto return_fail;
@@ -75,14 +88,13 @@ int Plxx::read_RAM(unsigned char address, unsigned char *readValue) {
 
 	*readValue = value;
 	return 0;
-	
+
 return_fail:
 	_tty_close();
 	return -1;
 }
 
 int Plxx::_tty_open() {
-
 	this->_ttyFd = open(this->_ttyDevice.c_str(), O_RDWR | O_NOCTTY | O_SYNC);
 	if (_ttyFd < 0) {
 		printf("Error opening %s: %s\n", this->_ttyDevice.c_str(), strerror(errno));
@@ -98,6 +110,8 @@ int Plxx::_tty_open() {
 }
 
 void Plxx::_tty_close() {
+	if (this->_ttyFd < 0)
+		return;
 	close(this->_ttyFd);
 	this->_ttyFd = -1;
 }

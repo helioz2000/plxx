@@ -9,10 +9,6 @@ PREFIX = /local
 SERVICE = plbridge.service
 SERVICEDIR = /etc/systemd/system
 
-# modbus header files could be located in different directories
-#INC += -I$(DESTDIR)/include/modbuspp -I$(DESTDIR)/include/modbus
-#INC += -I$(DESTDIR)$(PREFIX)/include/modbuspp -I$(DESTDIR)$(PREFIX)/include/modbus
-
 CC=gcc
 CXX=g++
 CFLAGS = -Wall -Wshadow -Wundef -Wmaybe-uninitialized -Wno-unknown-pragmas
@@ -20,14 +16,9 @@ CFLAGS += -O3 $(INC)
 
 # directory for local libs
 LDFLAGS = -L$(DESTDIR)$(PREFIX)/lib
-#LIBS += -lstdc++ -lm -lmosquitto -lconfig++ -lmodbus
 LIBS += -lstdc++ -lm -lmosquitto -lconfig++
-#LIBS_READ += -lstdc++
 
 #VPATH =
-
-#$(info LDFLAGS ="$(LDFLAGS)")
-#$(info INC="$(INC)")
 
 # folder for our object files
 OBJDIR = ./obj
@@ -41,9 +32,18 @@ OBJDIR = ./obj
 #SRCS = $(CSRCS) $(CPPSRCS)
 #OBJS = $(COBJS) $(CPPOBJS)
 
-.PHONY: clean
+.PHONY: all clean default read bridge service
 
-all: read
+default:
+	@echo
+	@echo "Use one of the following:"
+	@echo "make read (to compile plxx_read)"
+	@echo "make bridge (to compile plbridge)"
+	@echo "make all (to compile plxx_read and plbridge)"
+	@echo "sudo make install (to install binaries)"
+	@echo "sudo make service (to make plbridge a service)"
+
+all: read bridge
 
 #$(OBJDIR)/%.o: %.c
 #	@mkdir -p $(OBJDIR)
@@ -55,8 +55,6 @@ $(OBJDIR)/%.o: %.cpp
 	@echo "CXX $<"
 	@$(CXX)  $(CFLAGS) -c $< -o $@
 
-#read: $(OBJS)
-#	$(CC) -o $(BIN_READ) $(OBJS) $(LDFLAGS) $(LIBS_READ)
 
 $(OBJDIR)/plxx.o: plxx.h
 
@@ -66,14 +64,13 @@ $(OBJDIR)/mqtt.o: mqtt.h
 
 $(OBJDIR)/modbustag.o: modbustag.h
 
+$(OBJDIR)/hardware.o: hardware.h
+
 read: $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o
 	$(CXX) -o $(BIN_READ) $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o $(LDFLAGS)
 
-bridge: $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/modbustag.o
-	$(CXX) -o $(BIN_BRIDGE) $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/modbustag.o $(LDFLAGS) $(LIBS)
-
-#default: $(OBJS)
-#	$(CC) -o $(BIN) $(OBJS) $(LDFLAGS) $(LIBS)
+bridge: $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/modbustag.o $(OBJDIR)/hardware.o
+	$(CXX) -o $(BIN_BRIDGE) $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/modbustag.o $(OBJDIR)/hardware.o $(LDFLAGS) $(LIBS)
 
 #	nothing to do but will print info
 nothing:

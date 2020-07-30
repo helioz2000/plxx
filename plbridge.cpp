@@ -36,6 +36,7 @@
 
 #include "mqtt.h"
 #include "modbustag.h"
+#include "hardware.h"
 #include "plxx.h"
 #include "plbridge.h"
 
@@ -98,7 +99,7 @@ void mqtt_clear_tags(bool publish_noread, bool clear_retain);
 //TagStore ts;
 MQTT mqtt;
 Config cfg;			// config file
-//Hardware hw(false);	// no screen
+Hardware hw(false);	// no screen
 
 /**
  * log to console and syslog for daemon
@@ -445,7 +446,7 @@ bool process() {
 
 bool init_values(void)
 {
-/*
+
 	char info1[80], info2[80], info3[80], info4[80];
 
     // get hardware info
@@ -459,7 +460,7 @@ bool init_values(void)
 	    printf(info_label_text);
         }
     //printf(info_label_text);
-*/    return true;
+    return true;
 }
 
 #pragma mark MQTT
