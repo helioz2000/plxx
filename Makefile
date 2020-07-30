@@ -6,7 +6,7 @@ BIN_BRIDGE = plbridge
 BINDIR = /usr/local/sbin/
 DESTDIR = /usr
 PREFIX = /local
-SERVICE = plxxd.service
+SERVICE = plbridge.service
 SERVICEDIR = /etc/systemd/system
 
 # modbus header files could be located in different directories
@@ -69,8 +69,8 @@ $(OBJDIR)/modbustag.o: modbustag.h
 read: $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o
 	$(CXX) -o $(BIN_READ) $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o $(LDFLAGS)
 
-bridge: $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/mmodbustag.o
-	$(CXX) -o $(BIN_BRIDGE) $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/mmodbustag.o $(LDFLAGS) $(LIBS)
+bridge: $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/modbustag.o
+	$(CXX) -o $(BIN_BRIDGE) $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/modbustag.o $(LDFLAGS) $(LIBS)
 
 #default: $(OBJS)
 #	$(CC) -o $(BIN) $(OBJS) $(LDFLAGS) $(LIBS)
@@ -88,11 +88,12 @@ install:
 ifneq ($(shell id -u), 0)
 	@echo "!!!! install requires root !!!!"
 else
-	install -o root $(BIN_READ) $(BINDIR)$(BIN_READ)
+	@install -o root $(BIN_READ) $(BINDIR)$(BIN_READ)
+	@install -o root $(BIN_BRIDGE) $(BINDIR)$(BIN_BRIDGE)
 	@echo ++++++++++++++++++++++++++++++++++++++++++++
-	@echo ++ $(BIN_READ) has been installed in $(BINDIR)
-#	@echo ++ systemctl start $(BIN)
-#	@echo ++ systemctl stop $(BIN)
+	@echo ++ $(BIN_READ) and $(BIN_BRIDGE) has been installed in $(BINDIR)
+	@echo ++ systemctl start $(BIN_BRIDGE)
+	@echo ++ systemctl stop $(BIN_BRIDGE)
 endif
 
 # make systemd service

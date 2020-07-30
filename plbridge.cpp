@@ -7,7 +7,7 @@
  * July 2020
  *
  * Uses ModbusTag class for PLxx values
- * 
+ *
  */
 
 /*********************
@@ -60,9 +60,10 @@ static string execName;
 static string mbSlaveStatusTopic;
 bool exitSignal = false;
 bool debugEnabled = false;
+int plDebugLevel = 1;
 bool mqttDebugEnabled = false;
 bool runningAsDaemon = false;
-time_t mqtt_connect_time = 0;   // time the connection was initiated
+time_t mqtt_connect_time = 0;   	// time the connection was initiated
 bool mqtt_connection_in_progress = false;
 bool mqtt_retain_default = false;
 std::string processName;
@@ -70,16 +71,14 @@ char *info_label_text;
 useconds_t mainloopinterval = 250;   // milli seconds
 //extern void cpuTempUpdate(int x, Tag* t);
 //extern void roomTempUpdate(int x, Tag* t);
-//modbus_t *mb_ctx = NULL;
 updatecycle *updateCycles = NULL;	// array of update cycle definitions
-//ModbusTag *mbReadTags = NULL;			// array of all modbus read tags
-//ModbusTag *mbWriteTags = NULL;			// array of all modbus write tags
-int mbTagCount = -1;
-uint32_t modbusinterslavedelay = 0;	// delay between modbus transactions
-//int mbMaxRetries = 0;					// number of retries on modbus error (config file)
-//#define MODBUS_SLAVE_MAX 254		// highest permitted slave ID
-//#define MODBUS_SLAVE_MIN 1			// lowest permitted slave ID
-//bool mbSlaveOnline[MODBUS_SLAVE_MAX+1];			// array to store online/offline status
+ModbusTag *plReadTags = NULL;		// array of all PL read tags
+ModbusTag *plWriteTags = NULL;		// array of all PL write tags
+int plTagCount = -1;
+uint32_t plTransactionDelay = 0;	// delay between modbus transactions
+//int mbMaxRetries = 0;				// number of retries on modbus error (config file)
+#define PL_DEVICE_MAX 254			// highest permitted PL device ID
+#define PL_DEVICE_MIN 1				// lowest permitted PL device ID
 
 Plxx *pl;
 
@@ -93,7 +92,8 @@ void setMainLoopInterval(int newValue);
 //bool modbus_read_holding_registers(int slaveId, modbus_t *ctx, int addr, int nb, uint16_t *dest);
 //bool modbus_write_tag(ModbusTag *tag);
 //void modbus_write_request(int callbackId, Tag *tag);
-//bool mqtt_publish_tag(ModbusTag *tag);
+bool mqtt_publish_tag(ModbusTag *tag);
+void mqtt_clear_tags(bool publish_noread, bool clear_retain);
 
 //TagStore ts;
 MQTT mqtt;
@@ -112,7 +112,8 @@ template<typename... Args> void log(int priority, const char * f, Args... args) 
 	}
 }
 
-/** Handle OS signals
+/**
+ * Handle OS signals
  */
 void sigHandler(int signum)
 {
@@ -149,7 +150,8 @@ void timespec_diff(struct timespec *start, struct timespec *stop, struct timespe
 
 #pragma mark -- Config File functions
 
-/** Read configuration file.
+/**
+ * Read configuration file.
  * @return true if success
  */
 bool readConfig (void)
@@ -234,6 +236,26 @@ bool var_process(void) {
     return retval;
 }
 
+/**
+ * Read single tag from PL device
+ * @returns: true if successful read
+ */
+bool pl_read_tag(ModbusTag *tag) {
+	uint8_t registerValue;;
+	int retVal;
+
+	retVal = pl->read_RAM((uint8_t)tag->getAddress(), &registerValue);
+
+	//printf("%s - %s: %d\n", __FUNCTION__, tag->getTopic(), registerValue);
+
+	if (retVal == 0) {
+		tag->setRawValue(registerValue);
+	} else {
+		tag->noreadNotify();
+	}
+	mqtt_publish_tag(tag);
+	return retVal;
+}
 
 /**
  * process modbus write
@@ -305,17 +327,17 @@ bool var_process(void) {
 		addrCount++;
 	}
 	//printf("\n");
-	
+
 	tagArraySize = i;	// record the size of tagArray;
-	
+
 	// perform sanity check on address range
 	addrRange = addrHi - addrLo + 1;
 	if (addrRange > 125) return false;		// attempting to read too many registers
 	//printf("%s: tagArraySize=%d addrLo=%d addrHi=%d addrRange=%d\n",__func__, tagArraySize, addrLo, addrHi, addrRange);
-	
+
 	// Allocate memory for registers
 	mbReadRegisters = new uint16_t[addrRange];
-	
+
 	// read all tags in this group (multi read)
 	if (!modbus_read_holding_registers(slaveId, mb_ctx, addrLo, addrRange, mbReadRegisters)) {
 		//printf("%s: modbus_read_holding_registers failed\n", __func__);
@@ -323,7 +345,7 @@ bool var_process(void) {
 	} else {
 		usleep(modbusinterslavedelay);
 	}
-	
+
 	//iterate through register data
 	for (r=0; r<addrRange; r++) {
 		// calculate register address
@@ -347,7 +369,7 @@ bool var_process(void) {
 			// the used registers.
 		}
 	}
-	
+
 	// publish only the one tag referenced in parameters
 	mqtt_publish_tag(t);
 	delete [] mbReadRegisters;
@@ -365,6 +387,7 @@ bool pl_read_process() {
 	int tagIndex = 0;
 	int *tagArray;
 	bool retval = false;
+	ModbusTag tag;
 	time_t now = time(NULL);
 
 	//time_t refTime;
@@ -386,16 +409,18 @@ bool pl_read_process() {
 				// read each tag in the array
 				tagIndex = 0;
 				while (tagArray[tagIndex] >= 0) {
+					tag = plReadTags[tagArray[tagIndex]];
 					// if tag is not part of a group ....
+					//cout << tag.getTopicString() <<  endl;
 					//if (!modbus_read_multi_tags(tagArray, tagIndex, refTime))
 						// perform single tag read
-					//	modbus_read_tag(&mbReadTags[tagArray[tagIndex]]);
+					pl_read_tag(&plReadTags[tagArray[tagIndex]]);
 					tagIndex++;
-					//usleep(modbusinterslavedelay);
+					usleep(plTransactionDelay);
 				}
 			}
 			retval = true;
-			cout << now << " Update Cycle: " << updateCycles[index].ident << " - " << updateCycles[index].tagArraySize << " tags" << endl;
+			//cout << now << " Update Cycle: " << updateCycles[index].ident << " - " << updateCycles[index].tagArraySize << " tags" << endl;
 		}
 		index++;
 	}
@@ -405,7 +430,7 @@ bool pl_read_process() {
 
 /** Process all variables
  * @return true if at least one variable was processed
- * Note: the return value from this function is used 
+ * Note: the return value from this function is used
  * to measure processing time
  */
 bool process() {
@@ -420,9 +445,9 @@ bool process() {
 
 bool init_values(void)
 {
-	//char info1[80], info2[80], info3[80], info4[80];
-
 /*
+	char info1[80], info2[80], info3[80], info4[80];
+
     // get hardware info
     hw.get_model_name(info1, sizeof(info1));
     hw.get_os_name(info2, sizeof(info2));
@@ -434,13 +459,10 @@ bool init_values(void)
 	    printf(info_label_text);
         }
     //printf(info_label_text);
-    */
-    return true;
+*/    return true;
 }
 
 #pragma mark MQTT
-
-
 
 /** Initialise hardware tags
  * @return false on failure
@@ -614,15 +636,17 @@ void mqtt_topic_update(const struct mosquitto_message *message) {
  * @param tag: ModbusTag to publish
  * 
  */
-/*
+
 bool mqtt_publish_tag(ModbusTag *tag) {
 	if (!mqtt.isConnected()) return false;
 	if (tag->getTopicString().empty()) return true;	// don't publish if topic is empty
 	// Publish value if read was OK
 	if (!tag->isNoread()) {
 		mqtt.publish(tag->getTopic(), tag->getFormat(), tag->getScaledValue(), tag->getPublishRetain());
+		//printf("%s - %s \n", __FUNCTION__, tag->getTopic());
 		return true;
 	}
+	//printf("%s - NoRead: %s \n", __FUNCTION__, tag->getTopic());
 	// Handle Noread
 	if (!tag->noReadIgnoreExceeded()) return true;		// ignore noread, do nothing
 	// noreadignore is exceeded, need to take action
@@ -637,10 +661,9 @@ bool mqtt_publish_tag(ModbusTag *tag) {
 		// do nothing (default, -1)
 		break;
 	}
-	
+
 	return true;
 }
-*/
 
 /**
  * Publish noread value to all tags (normally done on program exit)
@@ -651,10 +674,10 @@ void mqtt_clear_tags(bool publish_noread = true, bool clear_retain = true) {
 
 	int index = 0, tagIndex = 0;
 	int *tagArray;
-//	ModbusTag mbTag;
+	ModbusTag plTag;
 	//printf("%s", __func__);
-	
-	// Iterate over modbus array
+
+	// Iterate over pl tag array
 	//mqtt.setRetain(false);
 	while (updateCycles[index].ident >= 0) {
 		// ignore if cycle has no tags to process
@@ -666,12 +689,12 @@ void mqtt_clear_tags(bool publish_noread = true, bool clear_retain = true) {
 		// read each tag in the array
 		tagIndex = 0;
 		while (tagArray[tagIndex] >= 0) {
-//			mbTag = mbReadTags[tagArray[tagIndex]];
+			plTag = plReadTags[tagArray[tagIndex]];
 			if (publish_noread) {}
-//				mqtt.publish(mbTag.getTopic(), mbTag.getFormat(), mbTag.getNoreadValue(), mbTag.getPublishRetain());
+				mqtt.publish(plTag.getTopic(), plTag.getFormat(), plTag.getNoreadValue(), plTag.getPublishRetain());
 				//mqtt_publish_tag(mbTag, true);			// publish noread value
 			if (clear_retain) {}
-//				mqtt.clear_retained_message(mbTag.getTopic());	// clear retained status
+				mqtt.clear_retained_message(plTag.getTopic());	// clear retained status
 			tagIndex++;
 		}
 		index++;
@@ -690,6 +713,194 @@ void mqtt_clear_tags(bool publish_noread = true, bool clear_retain = true) {
 }
 
 #pragma mark PLxx
+
+/**
+ * assign tags to update cycles
+ * generate arrays of tags assigned ot the same updatecycle
+ * 1) iterate over update cycles
+ * 2) count tags which refer to update cycle
+ * 3) allocate array for those tags
+ * 4) fill array with index of tags that match update cycle
+ * 5) assign array to update cycle
+ * 6) go back to 1) until all update cycles have been matched
+ */
+bool pl_assign_updatecycles () {
+	int updidx = 0;
+	int plTagIdx = 0;
+	int cycleIdent = 0;
+	int matchCount = 0;
+	int *intArray = NULL;
+	int arIndex = 0;
+	// iterate over updatecycle array
+	while (updateCycles[updidx].ident >= 0) {
+		cycleIdent = updateCycles[updidx].ident;
+		updateCycles[updidx].tagArray = NULL;
+		updateCycles[updidx].tagArraySize = 0;
+		// iterate over mbReadTags array
+		plTagIdx = 0;
+		matchCount = 0;
+		while (plReadTags[plTagIdx].updateCycleId() >= 0) {
+			// count tags with cycle id match
+			if (plReadTags[plTagIdx].updateCycleId() == cycleIdent) {
+				matchCount++;
+				//cout << cycleIdent <<" " << mbReadTags[mbTagIdx].getAddress() << endl;
+			}
+			plTagIdx++;
+		}
+		// skip to next cycle update if we have no matching tags
+		if (matchCount < 1) {
+			updidx++;
+			continue;
+		}
+		// -- We have some matching tags
+		// allocate array for tags in this cycleupdate
+		intArray = new int[matchCount+1];			// +1 to allow for end marker
+		// fill array with matching tag indexes
+		plTagIdx = 0;
+		arIndex = 0;
+		while (plReadTags[plTagIdx].updateCycleId() >= 0) {
+			// count tags with cycle id match
+			if (plReadTags[plTagIdx].updateCycleId() == cycleIdent) {
+				intArray[arIndex] = plTagIdx;
+				arIndex++;
+			}
+			plTagIdx++;
+		}
+		// mark end of array
+		intArray[arIndex] = -1;
+		// add the array to the update cycles
+		updateCycles[updidx].tagArray = intArray;
+		updateCycles[updidx].tagArraySize = arIndex;
+		// next update index
+		updidx++;
+	}
+	return true;
+}
+
+/**
+ * read tag configuration for one PL device from config file
+ */
+bool pl_config_tags(Setting& plTagsSettings, uint8_t deviceId) {
+	int tagIndex;
+	int tagAddress;
+	int tagUpdateCycle;
+	string strValue;
+	float fValue;
+	int intValue;
+	bool bValue;
+
+	int numTags = plTagsSettings.getLength();
+	if (numTags < 1) {
+		cout << "No tags Found " << endl;
+		return true;		// permissible condition
+	}
+
+	for (tagIndex = 0; tagIndex < numTags; tagIndex++) {
+		if (plTagsSettings[tagIndex].lookupValue("address", tagAddress)) {
+			plReadTags[plTagCount].setAddress(tagAddress);
+			plReadTags[plTagCount].setSlaveId(deviceId);
+		} else {
+			log(LOG_WARNING, "Error in config file, tag address missing");
+			continue;		// skip to next tag
+		}
+		if (plTagsSettings[tagIndex].lookupValue("update_cycle", tagUpdateCycle)) {
+			plReadTags[plTagCount].setUpdateCycleId(tagUpdateCycle);
+		}
+		if (plTagsSettings[tagIndex].lookupValue("group", intValue))
+				plReadTags[plTagCount].setGroup(intValue);
+		// is topic present? -> read mqtt related parametrs
+		if (plTagsSettings[tagIndex].lookupValue("topic", strValue)) {
+			plReadTags[plTagCount].setTopic(strValue.c_str());
+			if (plTagsSettings[tagIndex].lookupValue("retain", bValue))
+				plReadTags[plTagCount].setPublishRetain(bValue);
+			if (plTagsSettings[tagIndex].lookupValue("format", strValue))
+				plReadTags[plTagCount].setFormat(strValue.c_str());
+			if (plTagsSettings[tagIndex].lookupValue("multiplier", fValue))
+				plReadTags[plTagCount].setMultiplier(fValue);
+			if (plTagsSettings[tagIndex].lookupValue("offset", fValue))
+				plReadTags[plTagCount].setOffset(fValue);
+			if (plTagsSettings[tagIndex].lookupValue("noreadvalue", fValue))
+				plReadTags[plTagCount].setNoreadValue(fValue);
+			if (plTagsSettings[tagIndex].lookupValue("noreadaction", intValue))
+				plReadTags[plTagCount].setNoreadAction(intValue);
+			if (plTagsSettings[tagIndex].lookupValue("noreadignore", intValue))
+				plReadTags[plTagCount].setNoreadIgnore(intValue);
+		}
+		//cout << "Tag " << plTagCount << " addr: " << tagAddress << " cycle: " << tagUpdateCycle;
+		//cout << " Topic: " << plReadTags[plTagCount].getTopicString() << endl;
+		plTagCount++;
+	}
+	return true;
+}
+
+/**
+ * read slave configuration from config file
+ */
+
+bool pl_config_devices(Setting& plDeviceSettings) {
+	int deviceId, numTags;
+	string deviceName;
+	bool deviceEnabled;
+
+	// we need at least one slave in config file
+	int numDevices = plDeviceSettings.getLength();
+	if (numDevices < 1) {
+		log(LOG_ERR, "Error in config file, no Modbus slaves found");
+		return false;
+	}
+
+	// calculate the total number of tags for all configured slaves
+	numTags = 0;
+	for (int deviceIdx = 0; deviceIdx < numDevices; deviceIdx++) {
+		if (plDeviceSettings[deviceIdx].exists("tags")) {
+			if (!plDeviceSettings[deviceIdx].lookupValue("enabled", deviceEnabled)) {
+				deviceEnabled = true;	// true is assumed if there is no entry in config file
+			}
+			if (deviceEnabled) {
+				Setting& plTagsSettings = plDeviceSettings[deviceIdx].lookup("tags");
+				numTags += plTagsSettings.getLength();
+			}
+		}
+	}
+
+	plReadTags = new ModbusTag[numTags+1];
+
+	plTagCount = 0;
+	// iterate through devices
+	for (int deviceIdx = 0; deviceIdx < numDevices; deviceIdx++) {
+		plDeviceSettings[deviceIdx].lookupValue("name", deviceName);
+		if (plDeviceSettings[deviceIdx].lookupValue("id", deviceId)) {
+			if (plDebugLevel > 0)
+				printf("%s - processing Device %d (%s)\n", __func__, deviceId, deviceName.c_str());
+		} else {
+			log(LOG_ERR, "Config error - PL device ID missing in entry %d", deviceId+1);
+			return false;
+		}
+
+		// get list of tags
+		if (plDeviceSettings[deviceIdx].exists("tags")) {
+			if (!plDeviceSettings[deviceIdx].lookupValue("enabled", deviceEnabled)) {
+				deviceEnabled = true;	// true is assumed if there is no entry in config file
+			}
+			if (deviceEnabled) {
+				Setting& plTagsSettings = plDeviceSettings[deviceIdx].lookup("tags");
+				if (!pl_config_tags(plTagsSettings, deviceId)) {
+					return false; }
+			} else {
+				log(LOG_NOTICE, "PL device %d (%s) disabled in config", deviceId, deviceName.c_str());
+			}
+		} else {
+			log(LOG_NOTICE, "No tags defined for PL device %d", deviceId);
+			// this is a permissible condition
+		}
+	}
+	// mark end of array
+	plReadTags[plTagCount].setUpdateCycleId(-1);
+	plReadTags[plTagCount].setSlaveId(PL_DEVICE_MAX +1);
+	return true;
+}
+
+
 
 /**
  * read update cycles from config file
@@ -720,7 +931,7 @@ bool pl_config_updatecycles(Setting& updateCyclesSettings) {
 		updateCycles[index].ident = idValue;
 		updateCycles[index].interval = interval;
 		updateCycles[index].nextUpdateTime = time(0) + interval;
-		cout << "Update " << index << " ID " << idValue << " Interval: " << interval << " t:" << updateCycles[index].nextUpdateTime << endl;
+		//cout << "Update " << index << " ID " << idValue << " Interval: " << interval << " t:" << updateCycles[index].nextUpdateTime << endl;
 	}
 	// mark end of data
 	updateCycles[index].ident = -1;
@@ -747,11 +958,11 @@ bool pl_config() {
 		return false;
 	}
 
-/*	
-	// Configure modbus slaves
+
+	// Configure pl devices
 	try {
-		Setting& mbSlavesSettings = cfg.lookup("mbslaves");
-		if (!modbus_config_slaves(mbSlavesSettings)) {
+		Setting& plDeviceSettings = cfg.lookup("pldevices");
+		if (!pl_config_devices(plDeviceSettings)) {
 			return false; }
 	} catch (const SettingNotFoundException &excp) {
 		log(LOG_ERR, "Error in config file <%s> not found", excp.getPath());
@@ -763,9 +974,9 @@ bool pl_config() {
 		log(LOG_ERR, "Error in config file - Parse Exception");
 		return false;
 	} catch (...) {
-		log(LOG_ERR, "modbus_config <mbslaves> Error in config file (exception)");
+		log(LOG_ERR, "pl_config <pldevices> Error in config file (exception)");
 		return false;
-	} */
+	}
 	return true;
 }
 
@@ -787,7 +998,7 @@ int pl_baudrate(int baud) {
 
 
 /**
- * initialize modbus
+ * initialize PL interface device
  * @returns false for configuration error, otherwise true
  */
 bool init_pl()
@@ -817,7 +1028,7 @@ bool init_pl()
 	log(LOG_INFO, "PL connection opened on port %s at %d baud", pl_device.c_str(), pl_baud);
 
 	if (!pl_config()) return false;
-//	if (!modbus_assign_updatecycles()) return false;
+	if (!pl_assign_updatecycles()) return false;
 
 	return true;
 }
