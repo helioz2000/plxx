@@ -54,6 +54,7 @@ const int version_minor = 0;
 #define MAIN_LOOP_INTERVAL_MAXIMUM 2000   // milli seconds
 
 #define MQTT_BROKER_DEFAULT "127.0.0.1"
+#define MQTT_CLIENT_ID "plbridge"
 
 static string cpu_temp_topic = "";
 static string cfgFileName;
@@ -97,7 +98,7 @@ bool mqtt_publish_tag(ModbusTag *tag);
 void mqtt_clear_tags(bool publish_noread, bool clear_retain);
 
 //TagStore ts;
-MQTT mqtt;
+MQTT mqtt(MQTT_CLIENT_ID);
 Config cfg;			// config file
 Hardware hw(false);	// no screen
 
