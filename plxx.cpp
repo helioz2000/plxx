@@ -64,7 +64,7 @@ Plxx::~Plxx() {
 }
 
 /**
- * read value from RAM address
+ * read single byte value from RAM address
  * @param address: RAM address of the requested value
  * @param readValue: pointer to a byte which will hold the value
  * @returns 0 if successful, -1 on failure
@@ -92,6 +92,27 @@ int Plxx::read_RAM(unsigned char address, unsigned char *readValue) {
 return_fail:
 	_tty_close();
 	return -1;
+}
+
+/**
+ * read double byte value from RAM addresses
+ * @param lsb_addr: RAM address of the LSB byte value
+ * @param msb_addr: RAM address of the MSB byte value
+ * @param readValue: pointer to an integer which will hold the value
+ * @returns 0 if successful, -1 on failure
+ */
+int Plxx::read_RAM(unsigned char lsb_addr, unsigned char msb_addr, int *readValue) {
+	uint8_t lsb, msb;
+	int retVal;
+	int result;
+	*readValue = 0;
+	retVal = read_RAM(lsb_addr, &lsb);
+	if (retVal < 0) return retVal;
+	retVal = read_RAM(msb_addr, &msb);
+	if (retVal < 0) return retVal;
+	result = (((msb * 256) + lsb) + 38400); // / 5120;
+	*readValue = result;
+	return retVal;
 }
 
 int Plxx::_tty_open() {
@@ -200,8 +221,9 @@ int Plxx::_tty_read(unsigned char *value) {
 		if (rdlen > 0) {
 			rxlen += rdlen;
 			if  (buf[0] != 200) {
-			fprintf(stderr, "Error response expected:%d received:%d\n", 200, buf[0]);
-			return -1;
+				fprintf(stderr, "Error response expected:%d received:%d\n", 200, buf[0]);
+				*value = 0;
+				return -1;
 			}
 			*value = buf[1];
 		} else if (rdlen < 0) {

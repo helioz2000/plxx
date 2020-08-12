@@ -245,11 +245,36 @@ bool var_process(void) {
  * @returns: true if successful read
  */
 bool pl_read_tag(ModbusTag *tag) {
-	uint8_t registerValue;;
+	uint8_t registerByteValue;;
+	uint8_t lsb_addr, msb_addr;
 	int retVal;
+	int msb_val=0, lsb_val=0;
+	int address = tag->getAddress();
+	int registerValue;
+	float fValue;
 
-	retVal = pl->read_RAM((uint8_t)tag->getAddress(), &registerValue);
-
+	// single byte or multi byte address
+	if (address <= 0xFF) { 	// single byte
+		retVal = pl->read_RAM((uint8_t)address, &registerByteValue);
+		registerValue = registerByteValue;
+	} else {
+		// two byte read - currently only suitable for Voltage reading
+		lsb_addr = address & 0XFF;
+		msb_addr = (address & 0xFF00) >> 8;
+		retVal = pl->read_RAM(lsb_addr, &registerByteValue);
+		if (retVal == 0) {
+			lsb_val = registerByteValue;
+			retVal = pl->read_RAM(msb_addr, &registerByteValue);
+			if (retVal == 0) {
+				msb_val = registerByteValue;
+				fValue = (float)(((msb_val * 256)+lsb_val)+38400)/5120.0;	// value in voltes
+				registerValue = int(fValue*1000);							// convert to mV integer
+				//printf("%s - [%d] [%d] = %f %d\n", __FUNCTION__, msb_addr, lsb_addr, fValue, registerValue);
+			}
+		}
+		//retVal = pl->read_RAM(lsb_addr, msb_addr, &registerValue);
+		//printf("%s - [%d] [%d] = %d\n", __FUNCTION__, msb_addr, lsb_addr, registerValue);
+	}
 	//printf("%s - %s: %d\n", __FUNCTION__, tag->getTopic(), registerValue);
 
 	if (retVal == 0) {
@@ -280,106 +305,6 @@ bool pl_read_tag(ModbusTag *tag) {
 		slaveId = mbWriteTags[idx].getSlaveId();
 	}
 	return false;
-}*/
-
-/**
- * modbus read group of tags
- * reads tags in the same group (and same slave) in one operation.
- * if called with a tag which has already been read in this cycle
- * use the previously read result and just publish the value.
- * @param tagArray: an array tag indexes which are part 
- * @param arrayIndex: index into current tag array
- * @param refTime: time reference to identify already read tags
- * @returns true if group of tags have been read, false if tag is not in a group or a failure has occured
- */
-/*bool modbus_read_multi_tags(int *tagArray, int arrayIndex, time_t refTime) {
-	ModbusTag *t = &mbReadTags[tagArray[arrayIndex]];
-	ModbusTag tag;
-	ModbusTag *tp;
-	uint16_t *mbReadRegisters;
-	int slaveId, addr, addrRange, addrLo=99999, addrHi=0, addrCount = 0, group = t->getGroup();
-	int i, r, tagArraySize;
-	bool noread = false;
-	// if tag is not part of a group then return false
-	if (group < 1) return false;
-	// if tag has already been read in this cycle the reference time will match
-	if (t->getReferenceTime() == refTime) {
-		//tag value is up-to-date, we can to publish the tag
-		//printf("%s: already updated #%d [%d], publishing value %d\n", __func__, t.getSlaveId(), t.getAddress(), t.getRawValue());
-		mqtt_publish_tag(t);
-		return true;
-		}
-	// the tag is part of a group which has not been read in this cycle
-	slaveId = t->getSlaveId();
-	// assemble tag indexes which belong to same group and slave into one array
-	i = 0;
-	//printf("%s: reading [%d]=%d tagArray: ", __func__, t.getAddress(), t.getRawValue());
-	while (tagArray[i] >= 0) {
-		tag = mbReadTags[tagArray[i]];
-		i++;
-		// does the tag belong to this slave?
-		if (tag.getSlaveId() != slaveId) continue;
-		// is the tag in the same group?
-		if (tag.getGroup() != group) continue;
-		// Tag belongs to the same slave and group
-		// determine highest / lowest address to read
-		addr = tag.getAddress();
-		//printf("[%d] ", addr);
-		if (addr < addrLo) addrLo = addr;
-		if (addr > addrHi) addrHi = addr; 
-		// could have gaps in addresses, therefore (addrHi - addrLo) can be != addrCount
-		addrCount++;
-	}
-	//printf("\n");
-
-	tagArraySize = i;	// record the size of tagArray;
-
-	// perform sanity check on address range
-	addrRange = addrHi - addrLo + 1;
-	if (addrRange > 125) return false;		// attempting to read too many registers
-	//printf("%s: tagArraySize=%d addrLo=%d addrHi=%d addrRange=%d\n",__func__, tagArraySize, addrLo, addrHi, addrRange);
-
-	// Allocate memory for registers
-	mbReadRegisters = new uint16_t[addrRange];
-
-	// read all tags in this group (multi read)
-	if (!modbus_read_holding_registers(slaveId, mb_ctx, addrLo, addrRange, mbReadRegisters)) {
-		//printf("%s: modbus_read_holding_registers failed\n", __func__);
-		noread = true;	// mark this as a failed read
-	} else {
-		usleep(modbusinterslavedelay);
-	}
-
-	//iterate through register data
-	for (r=0; r<addrRange; r++) {
-		// calculate register address
-		addr = addrLo + r;
-		// iterate through tag array
-		for (i=0; i<tagArraySize; i++) {
-			tp = &mbReadTags[tagArray[i]];	// need to use pointer so we can modify original
-			// find matching address in tagArray
-			if (addr == tp->getAddress()) {				// tag matches address
-				if (noread) {
-					tp->noreadNotify();	// notify tag of noread event
-				} else {
-					tp->setRawValue(mbReadRegisters[r]);	// update tag with register value
-					tp->setReferenceTime(refTime);			// update tag reference time
-					//printf("%s: updating #%d [%d]=%d\n", __func__, slaveId, addr, mbReadRegisters[r]);
-				}
-				break;									// stop iterating through tagArray
-			}
-			// it is possible that the address is not found in the tagArray as the multi read
-			// will read a continous range of registers, some of which are located in between
-			// the used registers.
-		}
-	}
-
-	// publish only the one tag referenced in parameters
-	mqtt_publish_tag(t);
-	delete [] mbReadRegisters;
-	if (noread) return false;
-
-	return true;	// indicate that tag has been processed
 }*/
 
 /**
@@ -417,7 +342,7 @@ bool pl_read_process() {
 					// if tag is not part of a group ....
 					//cout << tag.getTopicString() <<  endl;
 					//if (!modbus_read_multi_tags(tagArray, tagIndex, refTime))
-						// perform single tag read
+					// perform single tag read
 					pl_read_tag(&plReadTags[tagArray[tagIndex]]);
 					tagIndex++;
 					usleep(plTransactionDelay);
@@ -637,7 +562,9 @@ void mqtt_topic_update(const struct mosquitto_message *message) {
 		fprintf(stderr, "%s: <%s> not  in ts\n", __func__, message->topic);
 	} else {
 		tp->setValueIsRetained(message->retain);
-		tp->setValue((const char*)message->payload);	// This will trigger a callback to modbus_write_request
+		if (message->payload != NULL) {
+			tp->setValue((const char*)message->payload);	// This will trigger a callback to modbus_write_request
+		}
 	}*/
 }
 
@@ -821,7 +748,8 @@ bool pl_config_tags(Setting& plTagsSettings, uint8_t deviceId) {
 		// is topic present? -> read mqtt related parametrs
 		if (plTagsSettings[tagIndex].lookupValue("topic", strValue)) {
 			plReadTags[plTagCount].setTopic(strValue.c_str());
-			if (plTagsSettings[tagIndex].lookupValue("retain", bValue))
+			plReadTags[plTagCount].setPublishRetain(mqtt_retain_default);	// set to default
+			if (plTagsSettings[tagIndex].lookupValue("retain", bValue))		// override default is required
 				plReadTags[plTagCount].setPublishRetain(bValue);
 			if (plTagsSettings[tagIndex].lookupValue("format", strValue))
 				plReadTags[plTagCount].setFormat(strValue.c_str());

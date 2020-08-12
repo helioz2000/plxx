@@ -40,6 +40,7 @@ public:
 	Plxx(const char* ttyDeviceStr, int baud);
 	~Plxx();
 	int read_RAM(unsigned char address, unsigned char *readValue);
+	int read_RAM(unsigned char lsb_addr, unsigned char msb_addr, int *readValue);
 private:
 	int _tty_open();
 	void _tty_close();
