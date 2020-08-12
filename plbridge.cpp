@@ -55,6 +55,7 @@ const int version_minor = 0;
 
 #define MQTT_BROKER_DEFAULT "127.0.0.1"
 #define MQTT_CLIENT_ID "plbridge"
+#define MQTT_RECONNECT_INTERVAL 10
 
 static string cpu_temp_topic = "";
 static string cfgFileName;
@@ -66,6 +67,7 @@ int plDebugLevel = 1;
 bool mqttDebugEnabled = false;
 bool runningAsDaemon = false;
 time_t mqtt_connect_time = 0;   	// time the connection was initiated
+time_t mqtt_next_connect_time = 0;	// time when next connect is scheduled
 bool mqtt_connection_in_progress = false;
 bool mqtt_retain_default = false;
 std::string processName;
@@ -546,6 +548,7 @@ void mqtt_connect(void) {
 	mqtt.connect();
 	mqtt_connection_in_progress = true;
 	mqtt_connect_time = time(NULL);
+	mqtt_next_connect_time = 0;
 	//printf("%s - Done\n", __func__);
 }
 
@@ -597,6 +600,7 @@ void mqtt_connection_status(bool status) {
 	// subscribe tags when connection is online
 	if (status) {
 		log(LOG_INFO, "Connected to MQTT broker [%s]", mqtt.broker());
+		mqtt_next_connect_time = 0;
 		mqtt_connection_in_progress = false;
 		mqtt.setRetain(mqtt_retain_default);
 		mqtt_subscribe_tags();
@@ -610,6 +614,10 @@ void mqtt_connection_status(bool status) {
 		} else {
 			log(LOG_WARNING, "Disconnected from MQTT broker [%s]", mqtt.broker());
 		}
+		if (!exitSignal) {
+ 			mqtt_next_connect_time = time(NULL) + MQTT_RECONNECT_INTERVAL;	// current time
+ 			log(LOG_INFO, "mqtt reconnect scheduled in %d seconds", MQTT_RECONNECT_INTERVAL);
+ 		}
 	}
 	//printf("%s - done\n", __func__);
 }
@@ -1127,7 +1135,14 @@ void main_loop()
 			sleep_usec = interval - processing_time;  // sleep time in us
 			//printf("%s - sleeping for %dus (%dus)\n", __func__, sleep_usec, processing_time);
 			usleep(sleep_usec);
-		} 
+		}
+
+		if (mqtt_next_connect_time > 0) {
+ 			if (time(NULL) >= mqtt_next_connect_time) {
+ 				mqtt_connect();
+ 			}
+ 		}
+
 	}
 	if (!runningAsDaemon)
 		printf("CPU time for variable processing: %dus - %dus\n", min_time, max_time);

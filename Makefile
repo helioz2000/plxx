@@ -57,13 +57,9 @@ $(OBJDIR)/%.o: %.cpp
 
 
 $(OBJDIR)/plxx.o: plxx.h
-
 $(OBJDIR)/plbridge.o: plbridge.h
-
 $(OBJDIR)/mqtt.o: mqtt.h
-
 $(OBJDIR)/modbustag.o: modbustag.h
-
 $(OBJDIR)/hardware.o: hardware.h
 
 read: $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o
@@ -98,7 +94,7 @@ service:
 ifneq ($(shell id -u), 0)
 	@echo "!!!! service requires root !!!!"
 else
-	install -o root $(SERVICE) $(SERVICEDIR)
+	install -m 644 -o root $(SERVICE) $(SERVICEDIR)
 	@systemctl daemon-reload
 	@systemctl enable $(SERVICE)
 	@echo $(BIN_BRIDGE) is now available a systemd service
