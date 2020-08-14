@@ -40,12 +40,14 @@ public:
 	Plxx(const char* ttyDeviceStr, int baud);
 	~Plxx();
 	int read_RAM(unsigned char address, unsigned char *readValue);
-	int read_RAM(unsigned char lsb_addr, unsigned char msb_addr, int *readValue);
+	int read_RAM(unsigned char lsb_addr, unsigned char msb_addr, unsigned char *lsb_value, unsigned char *msb_value);
+	int write_RAM(unsigned char address, unsigned char writeValue);
+
 private:
 	int _tty_open();
 	void _tty_close();
 	int _tty_set_attribs(int fd, int speed);
-	int _tty_write(unsigned char address, unsigned char cmd);
+	int _tty_write(unsigned char address, unsigned char cmd, unsigned char value=0);
 	int _tty_read(unsigned char *value);
 	
 	std::string _ttyDevice;

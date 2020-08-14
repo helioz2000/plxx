@@ -85,8 +85,7 @@ else
 	@install -o root $(BIN_BRIDGE) $(BINDIR)$(BIN_BRIDGE)
 	@echo ++++++++++++++++++++++++++++++++++++++++++++
 	@echo ++ $(BIN_READ) and $(BIN_BRIDGE) has been installed in $(BINDIR)
-	@echo ++ systemctl start $(BIN_BRIDGE)
-	@echo ++ systemctl stop $(BIN_BRIDGE)
+	@echo ++ sudo systemctl restart $(BIN_BRIDGE)
 endif
 
 # make systemd service

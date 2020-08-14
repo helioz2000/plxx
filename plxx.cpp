@@ -63,6 +63,29 @@ Plxx::~Plxx() {
 	_tty_close();
 }
 
+int Plxx::write_RAM(unsigned char address, unsigned char writeValue) {
+	struct stat sb;
+
+	// if serial device is not open ....
+	if (fstat(this->_ttyFd, &sb) != 0) {
+		if (_tty_open() < 0)	// open serial device
+			return -1;
+	}
+
+	if (_tty_write(address, PL_CMD_WR_RAM, writeValue) < 0)
+		goto return_fail;
+
+	// PLxx does not reply to a successful write command
+//	if (_tty_read(&value) < 0)
+//		goto return_fail;
+
+	return 0;
+
+return_fail:
+	_tty_close();
+	return -1;
+}
+
 /**
  * read single byte value from RAM address
  * @param address: RAM address of the requested value
@@ -95,24 +118,26 @@ return_fail:
 }
 
 /**
- * read double byte value from RAM addresses
+ * read two bytes from RAM addresses with minimum delay between readings
  * @param lsb_addr: RAM address of the LSB byte value
  * @param msb_addr: RAM address of the MSB byte value
- * @param readValue: pointer to an integer which will hold the value
+ * @param lsb_value: pointer to LSB value
+ * @param msb_value: pointer to MSB value
  * @returns 0 if successful, -1 on failure
+ *
+ * Note: inconsistency between the byte values can arise as the values
+ * can change between reading lsb and msb. 
  */
-int Plxx::read_RAM(unsigned char lsb_addr, unsigned char msb_addr, int *readValue) {
-	uint8_t lsb, msb;
-	int retVal;
-	int result;
-	*readValue = 0;
-	retVal = read_RAM(lsb_addr, &lsb);
-	if (retVal < 0) return retVal;
-	retVal = read_RAM(msb_addr, &msb);
-	if (retVal < 0) return retVal;
-	result = (((msb * 256) + lsb) + 38400); // / 5120;
-	*readValue = result;
-	return retVal;
+int Plxx::read_RAM(unsigned char lsb_addr, unsigned char msb_addr, unsigned char *lsb_value, unsigned char *msb_value) {
+	uint8_t lsbVal, msbVal;
+	int retVal1, retVal2;
+
+	retVal1 = read_RAM(lsb_addr, &lsbVal);
+	retVal2 = read_RAM(msb_addr, &msbVal);
+	if ( (retVal1 < 0) || (retVal2 < 0) ) return -1;
+	*lsb_value = lsbVal;
+	*msb_value = msbVal;
+	return 0;
 }
 
 int Plxx::_tty_open() {
@@ -173,12 +198,12 @@ int Plxx::_tty_set_attribs(int fd, int speed)
     return 0;
 }
 
-int Plxx::_tty_write(unsigned char address, unsigned char cmd) {
+int Plxx::_tty_write(unsigned char address, unsigned char cmd, unsigned char value) {
 	int wrLen;
 	unsigned char txbuf[10];
 	txbuf[0] = cmd;
 	txbuf[1] = address;
-	txbuf[2] = 0;
+	txbuf[2] = value;			// used in write operations
 	txbuf[3] = 255 - cmd;		// One's complement
 
 	wrLen = write(this->_ttyFd, txbuf, 4);
@@ -190,7 +215,10 @@ int Plxx::_tty_write(unsigned char address, unsigned char cmd) {
 	return 0;
 }
 
-/* read PLxx reply */
+/**
+ * read PLxx double byte response
+ * @param value: pointer to read value
+ */
 int Plxx::_tty_read(unsigned char *value) {
 	int rxlen = 0;
 	int rdlen;
@@ -199,6 +227,8 @@ int Plxx::_tty_read(unsigned char *value) {
 	fd_set rfds;
 	struct timeval tv;
 	int select_result;
+
+	if (value == NULL) return -1;
 
 	FD_ZERO(&rfds);
 	FD_SET(this->_ttyFd, &rfds);

@@ -73,14 +73,11 @@ bool mqtt_retain_default = false;
 std::string processName;
 char *info_label_text;
 useconds_t mainloopinterval = 250;   // milli seconds
-//extern void cpuTempUpdate(int x, Tag* t);
-//extern void roomTempUpdate(int x, Tag* t);
 updatecycle *updateCycles = NULL;	// array of update cycle definitions
 ModbusTag *plReadTags = NULL;		// array of all PL read tags
 ModbusTag *plWriteTags = NULL;		// array of all PL write tags
 int plTagCount = -1;
 uint32_t plTransactionDelay = 0;	// delay between modbus transactions
-//int mbMaxRetries = 0;				// number of retries on modbus error (config file)
 #define PL_DEVICE_MAX 254			// highest permitted PL device ID
 #define PL_DEVICE_MIN 1				// lowest permitted PL device ID
 
@@ -92,10 +89,6 @@ void mqtt_connection_status(bool status);
 void mqtt_topic_update(const struct mosquitto_message *message);
 void mqtt_subscribe_tags(void);
 void setMainLoopInterval(int newValue);
-//bool modbus_read_tag(ModbusTag *tag);
-//bool modbus_read_holding_registers(int slaveId, modbus_t *ctx, int addr, int nb, uint16_t *dest);
-//bool modbus_write_tag(ModbusTag *tag);
-//void modbus_write_request(int callbackId, Tag *tag);
 bool mqtt_publish_tag(ModbusTag *tag);
 void mqtt_clear_tags(bool publish_noread, bool clear_retain);
 
@@ -236,8 +229,63 @@ bool cfg_get_str(const std::string &path, std::string &value) {
  */
 bool var_process(void) {
     bool retval = false;
-    //time_t now = time(NULL);
     return retval;
+}
+
+/*
+ * convert double byte values
+ * unfortunately there is no standard conversion so this function
+ * performs the various format conversions.
+ *
+ */
+int pl_int_conversion(uint8_t lsb_addr, int lsb_val, int msb_val, int *value) {
+	float fValue;
+	switch(lsb_addr) {
+		case 220:	// battery voltage
+		case 237:	// sense voltage
+			fValue = (float)(((msb_val * 256)+lsb_val)+38400)/5.120;    // value in millvolts
+			*value = int(fValue);	// convert to int 
+			break;
+		case 188:	// Internal charge AH
+		case 193:	// External charge AH
+		case 198:	// Internal load AH
+		case 203:	// External load AH
+			*value = (msb_val * 8) + lsb_val;
+			break;
+		default:
+			log(LOG_WARNING, "%s - unable to perfrom conversion for addr: %d", __func__, lsb_addr);
+			return -1;
+	}
+	return 0;
+}
+
+/**
+ * Read double byte value
+ * @returns true for successful read
+ * @param lsb_addr 
+ * @param msb_addr
+ * @param *value pointer to integer for read value
+ */
+int pl_read_int(uint8_t lsb_addr, uint8_t msb_addr, int *value) {
+	int retVal = 0;
+	uint8_t registerByteValue;
+	int msb_val=0, lsb_val=0, registerIntValue = 0;
+
+	//printf("%s - %d %d\n", __func__, lsb_addr, msb_addr);
+	retVal = pl->read_RAM(lsb_addr, &registerByteValue);
+	if (retVal == 0) {
+		lsb_val = registerByteValue;
+		retVal = pl->read_RAM(msb_addr, &registerByteValue);
+		if (retVal == 0) {
+			msb_val = registerByteValue;
+			retVal = pl_int_conversion(lsb_addr, lsb_val, msb_val, &registerIntValue);
+			if (retVal == 0) {
+				*value = registerIntValue;
+			}
+			//printf("%s - [%d] [%d] = %f %d\n", __FUNCTION__, msb_addr, lsb_addr, fValue, registerValue);
+		}
+	}
+	return retVal;
 }
 
 /**
@@ -245,13 +293,11 @@ bool var_process(void) {
  * @returns: true if successful read
  */
 bool pl_read_tag(ModbusTag *tag) {
-	uint8_t registerByteValue;;
+	uint8_t registerByteValue;
 	uint8_t lsb_addr, msb_addr;
 	int retVal;
-	int msb_val=0, lsb_val=0;
 	int address = tag->getAddress();
-	int registerValue;
-	float fValue;
+	int registerValue = 0;
 
 	// single byte or multi byte address
 	if (address <= 0xFF) { 	// single byte
@@ -259,21 +305,10 @@ bool pl_read_tag(ModbusTag *tag) {
 		registerValue = registerByteValue;
 	} else {
 		// two byte read - currently only suitable for Voltage reading
+		//printf("%s - %s addr: %d\n", __func__, tag->getTopic(), address);
 		lsb_addr = address & 0XFF;
 		msb_addr = (address & 0xFF00) >> 8;
-		retVal = pl->read_RAM(lsb_addr, &registerByteValue);
-		if (retVal == 0) {
-			lsb_val = registerByteValue;
-			retVal = pl->read_RAM(msb_addr, &registerByteValue);
-			if (retVal == 0) {
-				msb_val = registerByteValue;
-				fValue = (float)(((msb_val * 256)+lsb_val)+38400)/5120.0;	// value in voltes
-				registerValue = int(fValue*1000);							// convert to mV integer
-				//printf("%s - [%d] [%d] = %f %d\n", __FUNCTION__, msb_addr, lsb_addr, fValue, registerValue);
-			}
-		}
-		//retVal = pl->read_RAM(lsb_addr, msb_addr, &registerValue);
-		//printf("%s - [%d] [%d] = %d\n", __FUNCTION__, msb_addr, lsb_addr, registerValue);
+		retVal = pl_read_int(lsb_addr, msb_addr, &registerValue);
 	}
 	//printf("%s - %s: %d\n", __FUNCTION__, tag->getTopic(), registerValue);
 
@@ -287,28 +322,7 @@ bool pl_read_tag(ModbusTag *tag) {
 }
 
 /**
- * process modbus write
- * only one write function is processed per call
- * @return false if there was nothing to process, otherwise true
- */
-/*bool modbus_write_process() {
-	int idx = 0;
-	uint8_t slaveId = mbWriteTags[idx].getSlaveId();
-	while ((slaveId >= MODBUS_SLAVE_MIN) && (slaveId <= MODBUS_SLAVE_MAX)) {
-		if (mbWriteTags[idx].getWritePending()) {
-			//printf ("%s - writing %d to Slave %d Addr %d idx %d\n", __func__, mbWriteTags[idx].getRawValue(),slaveId, mbWriteTags[idx].getAddress(), idx);
-			modbus_write_tag(&mbWriteTags[idx]);
-			mbWriteTags[idx].setWritePending(false);	// mark as write done
-			return true;			// end here, we only do one write
-			}
-		idx++;
-		slaveId = mbWriteTags[idx].getSlaveId();
-	}
-	return false;
-}*/
-
-/**
- * process modbus cyclic read update
+ * process pl cyclic read update
  * @return false if there was nothing to process, otherwise true
  */
 bool pl_read_process() {
@@ -319,7 +333,6 @@ bool pl_read_process() {
 	ModbusTag tag;
 	time_t now = time(NULL);
 
-	//time_t refTime;
 	while (updateCycles[index].ident >= 0) {
 		// ignore if cycle has no tags to process
 		if (updateCycles[index].tagArray == NULL) {
@@ -327,8 +340,6 @@ bool pl_read_process() {
 			index++; continue;
 		}
 
-		// new reference time for each read cycle
-		//refTime = time(NULL);		// used for group reads
 		if (now >= updateCycles[index].nextUpdateTime) {
 			// set next update cycle time
 			updateCycles[index].nextUpdateTime = now + updateCycles[index].interval;
@@ -339,10 +350,6 @@ bool pl_read_process() {
 				tagIndex = 0;
 				while (tagArray[tagIndex] >= 0) {
 					tag = plReadTags[tagArray[tagIndex]];
-					// if tag is not part of a group ....
-					//cout << tag.getTopicString() <<  endl;
-					//if (!modbus_read_multi_tags(tagArray, tagIndex, refTime))
-					// perform single tag read
 					pl_read_tag(&plReadTags[tagArray[tagIndex]]);
 					tagIndex++;
 					usleep(plTransactionDelay);
@@ -366,7 +373,6 @@ bool process() {
 	bool retval = false;
 	if (mqtt.isConnected()) {
 		if (pl_read_process()) retval = true;
-//		if (modbus_write_process()) retval = true;
 	}
 	var_process();	// don't want it in time measuring, doesn't take up much time
 	return retval;
