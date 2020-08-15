@@ -268,22 +268,16 @@ int pl_int_conversion(uint8_t lsb_addr, int lsb_val, int msb_val, int *value) {
  */
 int pl_read_int(uint8_t lsb_addr, uint8_t msb_addr, int *value) {
 	int retVal = 0;
-	uint8_t registerByteValue;
-	int msb_val=0, lsb_val=0, registerIntValue = 0;
+	uint8_t msb_val=0, lsb_val=0;
+	int registerIntValue = 0;
 
-	//printf("%s - %d %d\n", __func__, lsb_addr, msb_addr);
-	retVal = pl->read_RAM(lsb_addr, &registerByteValue);
+	retVal = pl->read_RAM(lsb_addr, msb_addr, &lsb_val, &msb_val);
 	if (retVal == 0) {
-		lsb_val = registerByteValue;
-		retVal = pl->read_RAM(msb_addr, &registerByteValue);
+		retVal = pl_int_conversion(lsb_addr, lsb_val, msb_val, &registerIntValue);
 		if (retVal == 0) {
-			msb_val = registerByteValue;
-			retVal = pl_int_conversion(lsb_addr, lsb_val, msb_val, &registerIntValue);
-			if (retVal == 0) {
-				*value = registerIntValue;
-			}
-			//printf("%s - [%d] [%d] = %f %d\n", __FUNCTION__, msb_addr, lsb_addr, fValue, registerValue);
+			*value = registerIntValue;
 		}
+		//printf("%s - [%d] [%d] = %f %d\n", __FUNCTION__, msb_addr, lsb_addr, fValue, registerValue);
 	}
 	return retVal;
 }
