@@ -41,11 +41,11 @@ using namespace std;
 //
 
 PLtag::PLtag() {
+	this->_value = 0.0;
 	this->_address = 0;
 	this->_group = 0;
 	this->_topic = "";
 	this->_slaveId = 0;
-	this->_rawValue = 0;
 	this->_multiplier = 1.0;
 	this->_offset = 0.0;
 	this->_format = "%f";
@@ -53,17 +53,14 @@ PLtag::PLtag() {
 	this->_noreadaction = -1;	// do nothing
 	this->_noreadignore = 0;
 	this->_noreadcount = 0;
-//	this->_writePending = false;
 	this->_ignoreRetained = false;
-	this->_dataType = 'r';
-//	this->_referenceTime = 0;
 	//printf("%s - constructor %d %s\\", __func__, this->_slaveId, this->_topic.c_str());
 	//throw runtime_error("Class Tag - forbidden constructor");
 }
 
 PLtag::PLtag(const uint16_t addr) {
 	this->_address = addr;
-	this->_rawValue = 0;
+	this->_value = 0.0;
 }
 
 PLtag::~PLtag() {
@@ -143,34 +140,33 @@ const char* PLtag::getFormat(void) {
 	return _format.c_str();
 }
 
-void PLtag::setRawValue(uint16_t uintValue) {
-	switch(_dataType) {
-		case 'r':
-			_rawValue = uintValue;
-			break;
-		case 'i':
-		case 'q':
-			if (uintValue > 0) _rawValue = 1;
-			else _rawValue = 0;
-			break;
-	}
+void PLtag::setValue(double newValue) {
+	_value = newValue;
 	_lastUpdateTime = time(NULL);
 	_noreadcount = 0;
 }
 
-uint16_t PLtag::getRawValue(void) {
-	return _rawValue;
+void PLtag::setValue(int newValue) {
+	setValue( (double) newValue );
 }
 
-uint16_t PLtag::getBoolValue(void) {
-	if (_rawValue == 0)
+double PLtag::getValue(void) {
+	return _value;
+}
+
+int PLtag::getIntValue(void) {
+	return (int)_value;
+}
+
+bool PLtag::getBoolValue(void) {
+	if (_value == 0.0)
 		return false;
 	else
 		return true;
 }
 
 float PLtag::getScaledValue(void) {
-	float fValue = (float) _rawValue;
+	float fValue = (float) _value;
 	fValue *= _multiplier;
 	return fValue + _offset;
 }
@@ -215,6 +211,7 @@ int PLtag::getNoreadIgnore(void) {
 	return _noreadignore;
 }
 
+/*
 bool PLtag::setDataType(char newType) {
 	switch (newType) {
 	case 'i':
@@ -238,6 +235,7 @@ bool PLtag::setDataType(char newType) {
 char PLtag::getDataType(void) {
 	return _dataType;
 }
+*/
 
 void PLtag::setGroup(int newValue) {
 	_group = newValue;

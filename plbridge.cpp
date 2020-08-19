@@ -295,7 +295,7 @@ bool pl_read_tag(PLtag *tag) {
 	//printf("%s - %s: %d\n", __FUNCTION__, tag->getTopic(), registerValue);
 
 	if (retVal == 0) {
-		tag->setRawValue(registerValue);
+		tag->setValue(registerValue);
 	} else {
 		tag->noreadNotify();
 	}

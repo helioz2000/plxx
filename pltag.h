@@ -74,21 +74,32 @@ public:
 
 	/**
 	* Set the value
-	* @param uintValue: the new value
+	* @param newValue: the new value
 	*/
-	void setRawValue(uint16_t uintValue);
+	void setValue(int newValue);
 
 	/**
-	* Get value
-	* @return value as uint
+	* Set value as double
 	*/
-	uint16_t getRawValue(void);
+	void setValue(double newValue);
+
+
+	/**
+	* Get value as double
+	*/
+	double getValue(void);
+
+	/**
+	* Get value as int
+	* @return value as int
+	*/
+	int getIntValue(void);
 
 	/**
 	* Get value as bool
 	* @return false if _rawValue is 0, otherwise true
 	*/
-	uint16_t getBoolValue(void);
+	bool getBoolValue(void);
 
 	/**
 	* Get scaled value
@@ -266,6 +277,7 @@ private:
 	// Use setters & getters to access these values
 	std::string _topic;				// storage for topic path
 	std::string _format;			// storage for publish format
+	double _value;					// storage for data value
 	bool _publish_retain;           // publish with or without retain
 	bool _write;					// true for write tag, false for read tag
 //	bool _writePending;				// value needs to be written to slave
@@ -279,10 +291,10 @@ private:
 	uint8_t	_slaveId;				// modbus address of slave
 	uint16_t _address;				// the address of the modbus tag in the slave
 	int	_group;						// group tags for single read
-	uint16_t _rawValue;				// the value of this modbus tag
+//	uint16_t _rawValue;				// the value of this modbus tag
 	int _updatecycle_id;			// update cycle identifier
 	time_t _lastUpdateTime;			// last update time (change of value)
-	char _dataType;					// i = input, q = output, r = register
+//	char _dataType;					// i = input, q = output, r = register
 //	time_t _referenceTime;			// time to be used externally only
 
 };
