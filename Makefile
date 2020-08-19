@@ -57,16 +57,16 @@ $(OBJDIR)/%.o: %.cpp
 
 
 $(OBJDIR)/plxx.o: plxx.h
-$(OBJDIR)/plbridge.o: plbridge.h
+$(OBJDIR)/plbridge.o: plbridge.h plxx.h mqtt.h pltag.h hardware.h
 $(OBJDIR)/mqtt.o: mqtt.h
-$(OBJDIR)/modbustag.o: modbustag.h
+$(OBJDIR)/pltag.o: pltag.h
 $(OBJDIR)/hardware.o: hardware.h
 
 read: $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o
 	$(CXX) -o $(BIN_READ) $(OBJDIR)/plxx.o $(OBJDIR)/plxx_read.o $(LDFLAGS)
 
-bridge: $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/modbustag.o $(OBJDIR)/hardware.o
-	$(CXX) -o $(BIN_BRIDGE) $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/modbustag.o $(OBJDIR)/hardware.o $(LDFLAGS) $(LIBS)
+bridge: $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/pltag.o $(OBJDIR)/hardware.o
+	$(CXX) -o $(BIN_BRIDGE) $(OBJDIR)/plxx.o $(OBJDIR)/plbridge.o $(OBJDIR)/mqtt.o $(OBJDIR)/pltag.o $(OBJDIR)/hardware.o $(LDFLAGS) $(LIBS)
 
 #	nothing to do but will print info
 nothing:

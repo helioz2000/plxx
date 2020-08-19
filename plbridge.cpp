@@ -35,7 +35,7 @@
 #include <mosquitto.h>
 
 #include "mqtt.h"
-#include "modbustag.h"
+#include "pltag.h"
 #include "hardware.h"
 #include "plxx.h"
 #include "plbridge.h"
@@ -74,8 +74,8 @@ std::string processName;
 char *info_label_text;
 useconds_t mainloopinterval = 250;   // milli seconds
 updatecycle *updateCycles = NULL;	// array of update cycle definitions
-ModbusTag *plReadTags = NULL;		// array of all PL read tags
-ModbusTag *plWriteTags = NULL;		// array of all PL write tags
+PLtag *plReadTags = NULL;		// array of all PL read tags
+PLtag *plWriteTags = NULL;		// array of all PL write tags
 int plTagCount = -1;
 uint32_t plTransactionDelay = 0;	// delay between modbus transactions
 #define PL_DEVICE_MAX 254			// highest permitted PL device ID
@@ -89,7 +89,7 @@ void mqtt_connection_status(bool status);
 void mqtt_topic_update(const struct mosquitto_message *message);
 void mqtt_subscribe_tags(void);
 void setMainLoopInterval(int newValue);
-bool mqtt_publish_tag(ModbusTag *tag);
+bool mqtt_publish_tag(PLtag *tag);
 void mqtt_clear_tags(bool publish_noread, bool clear_retain);
 
 //TagStore ts;
@@ -220,18 +220,6 @@ bool cfg_get_str(const std::string &path, std::string &value) {
 
 #pragma mark -- Processing
 
-/**
- * Process internal variables
- * Local variables are processed at a fixed time interval
- * The processing involves reading value from hardware and
- * publishing the value to MQTT broker
- * @returns true if one or more variable(s) were processed
- */
-bool var_process(void) {
-    bool retval = false;
-    return retval;
-}
-
 /*
  * convert double byte values
  * unfortunately there is no standard conversion so this function
@@ -286,7 +274,7 @@ int pl_read_int(uint8_t lsb_addr, uint8_t msb_addr, int *value) {
  * Read single tag from PL device
  * @returns: true if successful read
  */
-bool pl_read_tag(ModbusTag *tag) {
+bool pl_read_tag(PLtag *tag) {
 	uint8_t registerByteValue;
 	uint8_t lsb_addr, msb_addr;
 	int retVal;
@@ -324,7 +312,7 @@ bool pl_read_process() {
 	int tagIndex = 0;
 	int *tagArray;
 	bool retval = false;
-	ModbusTag tag;
+	PLtag tag;
 	time_t now = time(NULL);
 
 	while (updateCycles[index].ident >= 0) {
@@ -368,7 +356,7 @@ bool process() {
 	if (mqtt.isConnected()) {
 		if (pl_read_process()) retval = true;
 	}
-	var_process();	// don't want it in time measuring, doesn't take up much time
+//	var_process();	// don't want it in time measuring, doesn't take up much time
 	return retval;
 }
 
@@ -393,33 +381,6 @@ bool init_values(void)
 
 #pragma mark MQTT
 
-/** Initialise hardware tags
- * @return false on failure
- */
-bool init_hwtags(void)
-{
-
-//	Tag* tp = NULL;
-	std::string topicPath;
-
-	// CPU temperature (optional, may not exist)
-	if (cfg.lookupValue("cputemp.topic", topicPath)) {
-/*		cpu_temp_topic = topicPath;
-		tp = ts.addTag(topicPath.c_str());
-		tp->publishInterval = 0;
-		if (!cfg_get_int("cputemp.readinterval", tp->readInterval)) return false;
-		if (!cfg_get_int("cputemp.publishinterval", tp->publishInterval)) return false;
-		tp->nextReadTime = time(NULL) + tp->readInterval;
-		// enable publish if interval is present
-		if (tp->publishInterval > 0) {
-			tp->setPublish();
-			tp->nextPublishTime = time(NULL) + tp->publishInterval;
-		}
-*/
-	}
-	return true;
-}
-
 /** Initialise the tag database (tagstore)
  * @return false on failure
  */
@@ -429,7 +390,7 @@ bool init_tags(void) {
 //	int numTags, iVal, i;
 //	bool bVal;
 
-	if (!init_hwtags()) return false;
+//	if (!init_hwtags()) return false;
 	if (!cfg.exists("mqtt_tags")) {	// optional
 		log(LOG_NOTICE,"configuration - parameter \"mqtt_tags\" does not exist");
 		return true;
@@ -571,10 +532,10 @@ void mqtt_topic_update(const struct mosquitto_message *message) {
 /**
  * Publish tag to MQTT
  * @param tag: ModbusTag to publish
- * 
+ *
  */
 
-bool mqtt_publish_tag(ModbusTag *tag) {
+bool mqtt_publish_tag(PLtag *tag) {
 	if (!mqtt.isConnected()) return false;
 	if (tag->getTopicString().empty()) return true;	// don't publish if topic is empty
 	// Publish value if read was OK
@@ -611,7 +572,7 @@ void mqtt_clear_tags(bool publish_noread = true, bool clear_retain = true) {
 
 	int index = 0, tagIndex = 0;
 	int *tagArray;
-	ModbusTag plTag;
+	PLtag plTag;
 	//printf("%s", __func__);
 
 	// Iterate over pl tag array
@@ -801,7 +762,7 @@ bool pl_config_devices(Setting& plDeviceSettings) {
 		}
 	}
 
-	plReadTags = new ModbusTag[numTags+1];
+	plReadTags = new PLtag[numTags+1];
 
 	plTagCount = 0;
 	// iterate through devices

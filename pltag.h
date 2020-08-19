@@ -1,53 +1,53 @@
 /**
- * @file modbustag.h
+ * @file pltag.h
 -----------------------------------------------------------------------------
- Class "ModbusTag" encapsulates a single Modbus Tag unit
+ Class encapsulates a single PL device Tag unit
  
 -----------------------------------------------------------------------------
 */
 
-#ifndef _MODBUSTAG_H_
-#define _MODBUSTAG_H_
+#ifndef _PLTAG_H_
+#define _PLTAG_H_
 
 #include <stdint.h>
 
 #include <iostream>
 #include <string>
 
-class ModbusTag {
+class PLtag {
 public:
     /**
      * Empty constructor
      */
-    ModbusTag();
+    PLtag();
 
     /**
      * Constructor
      * @param topic: tag topic
      */
-    ModbusTag(const uint16_t addr);
+    PLtag(const uint16_t addr);
 
     /**
      * Destructor
      */
-    ~ModbusTag();
+    ~PLtag();
 
 	/**
 	 * Notification for noread occurence
 	 */
 	void noreadNotify(void);
-	
+
 	/**
 	 * Get tag noread status
 	 */
 	bool isNoread(void);
-	 
+
 	/**
 	 * Is noreadignore exceeded
 	 */
 	bool noReadIgnoreExceeded(void);
-	
-	
+
+
 	/**
 	* Set the address
 	* @param address: the new address
@@ -107,7 +107,7 @@ public:
 	* @return updatecycle_id as int
 	*/
 	int updateCycleId(void);
-	
+
 	/**
 	* Get the topic string
 	* @return the topic string
@@ -162,7 +162,7 @@ public:
 	 */
 	void setIgnoreRetained(bool newValue);
 	bool getIgnoreRetained(void);
-	
+
 	/**
 	* Get the format string
 	* @return the format string
@@ -178,57 +178,57 @@ public:
 	* Set multiplier
 	*/
 	void setMultiplier(float);
-	
+
 	/**
 	* Set offset value
 	*/
 	void setOffset(float);
-	
+
 	/**
 	* Set noread value
 	*/
 	void setNoreadValue(float);
-	
+
 	/**
 	 * Get noread value
 	*/
 	float getNoreadValue(void);
-	
+
 	/**
 	* Set noread action
 	*/
 	void setNoreadAction(int);
-	
+
 	/**
 	 * Get noread action
 	*/
 	int getNoreadAction(void);
-	
+
 	/**
 	* Set noread ignore
 	*/
 	void setNoreadIgnore(int);
-	
+
 	/**
 	 * Get noread ignore
 	*/
 	int getNoreadIgnore(void);
-	
+
 	/**
 	 * Set data type
 	 */
 	bool setDataType(char);
-	
+
 	/**
 	 * Get data type
 	 */
 	char getDataType(void);
-	
+
 	/**
 	 * Set group
 	 */
 	void setGroup(int);
-	
+
 	/**
 	 * Get group
 	 */
@@ -237,24 +237,24 @@ public:
 	/**
 	 * Set reference time
 	 */
-	void setReferenceTime(time_t);
-	
+//	void setReferenceTime(time_t);
+
 	/**
 	 * Get reference time
 	 */
-	time_t getReferenceTime(void);
-	
+//	time_t getReferenceTime(void);
+
 	/**
 	 * Set write pending
 	 * to indicate that value needs to be written to the slave
 	 */
-	void setWritePending(bool);
-	
+//	void setWritePending(bool);
+
 	/**
 	 * Get write pending
 	 */
-	bool getWritePending(void);
-	
+//	bool getWritePending(void);
+
 	// public members used to store data which is not used inside this class
 	//int readInterval;                   // seconds between reads
 	//time_t nextReadTime;                // next scheduled read
@@ -268,7 +268,7 @@ private:
 	std::string _format;			// storage for publish format
 	bool _publish_retain;           // publish with or without retain
 	bool _write;					// true for write tag, false for read tag
-	bool _writePending;				// value needs to be written to slave
+//	bool _writePending;				// value needs to be written to slave
 	bool _ignoreRetained;			// do not write retained value to slave
 	float _multiplier;				// multiplier for scaled value
 	float _offset;					// offset for scaled value
@@ -283,10 +283,10 @@ private:
 	int _updatecycle_id;			// update cycle identifier
 	time_t _lastUpdateTime;			// last update time (change of value)
 	char _dataType;					// i = input, q = output, r = register
-	time_t _referenceTime;			// time to be used externally only
-	
+//	time_t _referenceTime;			// time to be used externally only
+
 };
 
 
 
-#endif /* _MODBUSTAG_H_ */
+#endif /* _PLTAG_H_ */

@@ -1,5 +1,5 @@
 /**
- * @file modbustag.cpp
+ * @file pltag.cpp
  *
  */
 
@@ -17,7 +17,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include "modbustag.h"
+#include "pltag.h"
 
 #include <stdexcept>
 #include <iostream>
@@ -40,7 +40,7 @@ using namespace std;
 // Class Tag
 //
 
-ModbusTag::ModbusTag() {
+PLtag::PLtag() {
 	this->_address = 0;
 	this->_group = 0;
 	this->_topic = "";
@@ -53,97 +53,97 @@ ModbusTag::ModbusTag() {
 	this->_noreadaction = -1;	// do nothing
 	this->_noreadignore = 0;
 	this->_noreadcount = 0;
-	this->_writePending = false;
+//	this->_writePending = false;
 	this->_ignoreRetained = false;
 	this->_dataType = 'r';
-	this->_referenceTime = 0;
+//	this->_referenceTime = 0;
 	//printf("%s - constructor %d %s\\", __func__, this->_slaveId, this->_topic.c_str());
 	//throw runtime_error("Class Tag - forbidden constructor");
 }
 
-ModbusTag::ModbusTag(const uint16_t addr) {
+PLtag::PLtag(const uint16_t addr) {
 	this->_address = addr;
 	this->_rawValue = 0;
 }
 
-ModbusTag::~ModbusTag() {
+PLtag::~PLtag() {
 	//cout << "Topic: <" << topic << ">" << endl;
 	//printf("%s - destructor %d\n", __func__, address);
 }
 
-void ModbusTag::noreadNotify(void) {
+void PLtag::noreadNotify(void) {
 	if (_noreadcount <= _noreadignore)	// if noreadignore is 0 noreadcount will still increment to 1
 		_noreadcount++;					// a noreadcount > 0 indicates the tag is in noread state
 }
 
-bool ModbusTag::isNoread(void) {
+bool PLtag::isNoread(void) {
 	if (_noreadcount > 0) return true;
 	else return false;
 }
 
-bool ModbusTag::noReadIgnoreExceeded(void) {
+bool PLtag::noReadIgnoreExceeded(void) {
 	if (_noreadcount > _noreadignore) return true;
 	else return false;
 }
 
-void ModbusTag::setSlaveId(int newId) {
+void PLtag::setSlaveId(int newId) {
 	_slaveId = newId;
 }
 
-uint8_t ModbusTag::getSlaveId(void) {
+uint8_t PLtag::getSlaveId(void) {
 	return _slaveId;
 }
 
-void ModbusTag::setAddress(int newAddress) {
+void PLtag::setAddress(int newAddress) {
 	_address = newAddress;
 }
 
-uint16_t ModbusTag::getAddress(void) {
+uint16_t PLtag::getAddress(void) {
 	return _address;
 }
 
-void ModbusTag::setTopic(const char *topicStr) {
+void PLtag::setTopic(const char *topicStr) {
 	if (topicStr != NULL) {
 		_topic = topicStr;
 	}
 }
 
-const char* ModbusTag::getTopic(void) {
+const char* PLtag::getTopic(void) {
 	return _topic.c_str();
 }
 
-std::string ModbusTag::getTopicString(void) {
+std::string PLtag::getTopicString(void) {
 	return _topic;
 }
 
-void ModbusTag::setPublishRetain(bool newRetain) {
+void PLtag::setPublishRetain(bool newRetain) {
     _publish_retain = newRetain;
 }
 
-bool ModbusTag::getPublishRetain(void) {
+bool PLtag::getPublishRetain(void) {
     return _publish_retain;
 }
 
-void ModbusTag::setIgnoreRetained(bool newValue) {
+void PLtag::setIgnoreRetained(bool newValue) {
 	_ignoreRetained = newValue;
 }
 
-bool ModbusTag::getIgnoreRetained(void) {
+bool PLtag::getIgnoreRetained(void) {
 	return _ignoreRetained;
 }
 
 
-void ModbusTag::setFormat(const char *formatStr) {
+void PLtag::setFormat(const char *formatStr) {
 	if (formatStr != NULL) {
 		_format = formatStr;
 	}
 }
 
-const char* ModbusTag::getFormat(void) {
+const char* PLtag::getFormat(void) {
 	return _format.c_str();
 }
 
-void ModbusTag::setRawValue(uint16_t uintValue) {
+void PLtag::setRawValue(uint16_t uintValue) {
 	switch(_dataType) {
 		case 'r':
 			_rawValue = uintValue;
@@ -158,64 +158,64 @@ void ModbusTag::setRawValue(uint16_t uintValue) {
 	_noreadcount = 0;
 }
 
-uint16_t ModbusTag::getRawValue(void) {
+uint16_t PLtag::getRawValue(void) {
 	return _rawValue;
 }
 
-uint16_t ModbusTag::getBoolValue(void) {
+uint16_t PLtag::getBoolValue(void) {
 	if (_rawValue == 0)
 		return false;
 	else
 		return true;
 }
 
-float ModbusTag::getScaledValue(void) {
+float PLtag::getScaledValue(void) {
 	float fValue = (float) _rawValue;
 	fValue *= _multiplier;
 	return fValue + _offset;
 }
 
-void ModbusTag::setMultiplier(float newMultiplier) {
+void PLtag::setMultiplier(float newMultiplier) {
 	_multiplier = newMultiplier;
 }
 
-void ModbusTag::setOffset(float newOffset) {
+void PLtag::setOffset(float newOffset) {
 	_offset = newOffset;
 }
 
-void ModbusTag::setUpdateCycleId(int ident) {
+void PLtag::setUpdateCycleId(int ident) {
 	_updatecycle_id = ident;
 }
 
-int ModbusTag::updateCycleId(void) {
+int PLtag::updateCycleId(void) {
 	return _updatecycle_id;
 }
 
-void ModbusTag::setNoreadValue(float newValue) {
+void PLtag::setNoreadValue(float newValue) {
 	_noreadvalue = newValue;
 }
 
-float ModbusTag::getNoreadValue(void) {
+float PLtag::getNoreadValue(void) {
 	return _noreadvalue;
 }
 
-void ModbusTag::setNoreadAction(int newValue) {
+void PLtag::setNoreadAction(int newValue) {
 	_noreadaction = newValue;
 }
-	
-int ModbusTag::getNoreadAction(void) {
+
+int PLtag::getNoreadAction(void) {
 	return _noreadaction;
 }
-	
-void ModbusTag::setNoreadIgnore(int newValue) {
+
+void PLtag::setNoreadIgnore(int newValue) {
 	_noreadignore = newValue;
 }
-	
-int ModbusTag::getNoreadIgnore(void) {
+
+int PLtag::getNoreadIgnore(void) {
 	return _noreadignore;
 }
 
-bool ModbusTag::setDataType(char newType) {
+bool PLtag::setDataType(char newType) {
 	switch (newType) {
 	case 'i':
 	case 'I':
@@ -235,30 +235,15 @@ bool ModbusTag::setDataType(char newType) {
 	return true;
 }
 
-char ModbusTag::getDataType(void) {
+char PLtag::getDataType(void) {
 	return _dataType;
 }
 
-void ModbusTag::setGroup(int newValue) {
+void PLtag::setGroup(int newValue) {
 	_group = newValue;
 }
-	
-int ModbusTag::getGroup(void) {
+
+int PLtag::getGroup(void) {
 	return _group;
 }
 
-void ModbusTag::setReferenceTime(time_t newValue) {
-	_referenceTime = newValue;
-}
-	
-time_t ModbusTag::getReferenceTime(void) {
-	return _referenceTime;
-}
-
-void ModbusTag::setWritePending(bool newValue) {
-	_writePending = newValue;
-}
-	
-bool ModbusTag::getWritePending(void) {
-	return _writePending;
-}
