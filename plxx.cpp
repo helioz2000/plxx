@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/select.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -151,13 +152,23 @@ int Plxx::_tty_open() {
 		this->_tty_close();
 		return -1;
 	}
+
+	// acquire exclusive lock
+	if (flock(_ttyFd, LOCK_EX | LOCK_NB) != 0) {
+		printf("%s: Unable to lock %s - %d %s\n",__func__,this->_ttyDevice.c_str(), errno, strerror(errno)); 
+		_tty_close(true);
+		return -1;
+	}
 	//set_mincount(_tty_Fd, 0);                /* set to pure timed read */
 	return 0;
 }
 
-void Plxx::_tty_close() {
+void Plxx::_tty_close(bool ignoreLock) {
 	if (this->_ttyFd < 0)
 		return;
+	if (!ignoreLock) {
+		flock(_ttyFd, LOCK_UN);	// release exclusive lock
+	}
 	close(this->_ttyFd);
 	this->_ttyFd = -1;
 }

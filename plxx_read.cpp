@@ -173,9 +173,11 @@ int main (int argc, char *argv[])
 
 	printf("Address %d contains %d\n", address, value);
 
+	delete pl;
 	exit(EXIT_SUCCESS);
 
 exit_fail:
+	delete pl;
 	//log(LOG_INFO, "exit with error");
 	exit(EXIT_FAILURE);
 }

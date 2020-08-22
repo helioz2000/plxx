@@ -45,11 +45,11 @@ public:
 
 private:
 	int _tty_open();
-	void _tty_close();
+	void _tty_close(bool ignoreLock = false);
 	int _tty_set_attribs(int fd, int speed);
 	int _tty_write(unsigned char address, unsigned char cmd, unsigned char value=0);
 	int _tty_read(unsigned char *value);
-	
+
 	std::string _ttyDevice;
 	int _ttyBaud;
 	int _ttyFd;

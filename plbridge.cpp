@@ -978,6 +978,7 @@ void exit_loop(void)
 	}
 
 	delete [] updateCycles;
+	delete pl;
 }
 
 /** 
