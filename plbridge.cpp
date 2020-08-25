@@ -248,9 +248,26 @@ int pl_int_conversion(uint8_t lsb_addr, int lsb_val, int msb_val, int *value) {
 }
 
 /**
+ * Optional conversion for byte
+ * @returns 0 if succesful
+ */
+int pl_byte_conversion(uint8_t addr, uint8_t byte_val, int *value) {
+	switch(addr) {
+		case 101:		// rstate (uses only 2 bits)
+			*value = (int)(byte_val && 0x03);		// mask out lower bits
+			return 0;
+			break;
+		default:
+			*value = (int)byte_val;
+			return 0;
+	}
+	return 0;
+}
+
+/**
  * Read double byte value
  * @returns true for successful read
- * @param lsb_addr 
+ * @param lsb_addr
  * @param msb_addr
  * @param *value pointer to integer for read value
  */
@@ -284,7 +301,8 @@ bool pl_read_tag(PLtag *tag) {
 	// single byte or multi byte address
 	if (address <= 0xFF) { 	// single byte
 		retVal = pl->read_RAM((uint8_t)address, &registerByteValue);
-		registerValue = registerByteValue;
+		pl_byte_conversion((uint8_t)address, registerByteValue, &registerValue);
+		//registerValue = registerByteValue;
 	} else {
 		// two byte read - currently only suitable for Voltage reading
 		//printf("%s - %s addr: %d\n", __func__, tag->getTopic(), address);
@@ -952,19 +970,19 @@ void setMainLoopInterval(int newValue)
 	log(LOG_INFO, "Main Loop interval is %dms", mainloopinterval);
 }
 
-/** 
+/**
  * called on program exit
  */
-void exit_loop(void) 
+void exit_loop(void)
 {
 	bool bValue, clearonexit = false, noreadonexit = false;
 
-	// how to handle mqtt broker published tags 
+	// how to handle mqtt broker published tags
 	// clear retain status for all tags?
 	if (cfg.lookupValue("mqtt.clearonexit", bValue))
 		clearonexit = bValue;
 	// publish noread value for all tags?
-	if (cfg.lookupValue("mqtt.noreadonexit", bValue)) 
+	if (cfg.lookupValue("mqtt.noreadonexit", bValue))
 		noreadonexit = bValue;
 	if (noreadonexit || clearonexit)
 		mqtt_clear_tags(noreadonexit, clearonexit);
