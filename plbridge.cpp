@@ -254,7 +254,7 @@ int pl_int_conversion(uint8_t lsb_addr, int lsb_val, int msb_val, int *value) {
 int pl_byte_conversion(uint8_t addr, uint8_t byte_val, int *value) {
 	switch(addr) {
 		case 101:		// rstate (uses only 2 bits)
-			*value = (int)(byte_val && 0x03);		// mask out lower bits
+			*value = (int)(byte_val & 0x03);		// mask out lower bits
 			return 0;
 			break;
 		default:
